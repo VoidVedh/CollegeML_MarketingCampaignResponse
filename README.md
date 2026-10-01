@@ -3,73 +3,97 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.9.0-orange.svg)](https://scikit-learn.org/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.64.0-red.svg)](https://streamlit.io/)
-[![Status](https://img.shields.io/badge/project-submission--ready-brightgreen.svg)]()
+[![Status](https://img.shields.io/badge/verification-passed-brightgreen.svg)]()
 
-A complete, production-grade, college-submission-ready machine learning system that predicts customer propensity to respond to promotional marketing campaigns. The project empowers marketing leaders to allocate advertising spend with statistical precision, suppress non-responsive contacts, slash wasted expenditure by **>72%**, and nearly **quadruple campaign ROI to 394.6%**.
+A complete, production-grade, verified machine learning system that predicts customer propensity to respond to promotional marketing campaigns. The project empowers marketing leaders to allocate advertising spend with statistical precision, suppress non-responsive contacts, slash wasted expenditure by **46.6% to 76.6%**, and deliver **$6,480.00 in net campaign profit** (242.7% ROI).
 
 ---
 
 ## 📋 Executive Overview & Key Results
 
-| Metric / Objective | Traditional Mass Outreach | Default ML (Threshold 0.50) | Optimized ML (Threshold 0.39) |
-| :--- | :---: | :---: | :---: |
-| **Deployed Algorithm** | None (Spray & Pray) | **Gradient Boosting** | **Gradient Boosting** |
-| **Contacts Targeted (per 1,000 customers)** | 1,000 | 214 | 279 |
-| **Total Campaign Spend ($)** | $5,000.00 | $1,070.00 | $1,395.00 |
-| **Responders Reached** | 201 (100%) | 117 (58.2%) | 138 (68.7%) |
-| **Wasted Contacts (False Positives)** | 799 (79.9% waste) | 97 | 141 |
-| **Gross Revenue ($)** | $10,050.00 | $5,850.00 | $6,900.00 |
-| **Net Campaign Profit ($)** | $5,050.00 | $4,780.00 | **$5,505.00 (Highest Profit)** |
-| **Marketing ROI (%)** | 101.0% | **446.7%** | **394.6%** |
-| **Ad Spend Saved vs. Mass Outreach** | 0% ($0.00) | **78.6% ($3,930 saved)** | **72.1% ($3,605 saved)** |
+| Metric / Objective | Traditional Mass Outreach | Default ML (Threshold 0.50) | F1-Optimal (Threshold 0.30) | Profit-Optimal (Threshold 0.07) [Deployed] |
+| :--- | :---: | :---: | :---: | :---: |
+| **Deployed Model** | None (Spray & Pray) | **Logistic Regression (Calibrated)** | **Logistic Regression (Calibrated)** | **Logistic Regression (Calibrated)** |
+| **Contacts Targeted (per 1,000 customers)** | 1000 | 127 | 234 | **534** |
+| **Total Campaign Spend ($)** | $5,000.00 | $635.00 | $1,170.00 | **$2,670.00** |
+| **Responders Reached** | 201 (100%) | 100 (49.8%) | 143 (71.1%) | **183 (91.0%)** |
+| **Wasted Contacts (False Positives)** | 799 | 27 | 91 | 351 |
+| **Gross Revenue ($)** | $10,050.00 | $5,000.00 | $7,150.00 | **$9,150.00** |
+| **Net Campaign Profit ($)** | $5,050.00 | $4,365.00 | $5,980.00 | **$6,480.00 (Highest Profit)** |
+| **Marketing ROI (%)** | 101.0% | 687.4% | 511.1% | **242.7%** |
+| **Ad Spend Saved vs. Mass Outreach** | 0% ($0.00) | 87.3% ($4,365.00 saved) | 76.6% ($3,830.00 saved) | **46.6% ($2,330.00 saved)** |
 
 ---
 
-## 🏗️ Project Architecture & Directory Structure
+## 🏆 Model Selection & Benchmark Results
+
+### Defensible Selection Rule
+Statistical Tie Disclosed: The top two models, Logistic Regression (CV PR-AUC: 0.7223 ± 0.0267) and Gradient Boosting (CV PR-AUC: 0.7169 ± 0.0254), are within 1 standard deviation (0.0054 < 0.0267). Therefore, they are statistically tied on ranking performance. Logistic Regression broke the tie with lower FPR at 70% recall (0.1026 vs 0.1214).
+
+- **Winning Model:** Logistic Regression
+- **5-Fold CV PR-AUC:** 0.7223 ± 0.0267
+- **5-Fold CV ROC-AUC:** 0.8883 ± 0.0104
+- **Test Set ROC-AUC:** 0.8759 (95% Bootstrap CI: [0.8475, 0.9032])
+- **Test Set PR-AUC:** 0.7286 (95% Bootstrap CI: [0.6723, 0.7858])
+- **Test FPR @ Recall=70%:** 0.1026 (lowest among all 6 models)
+- **Top Response Predictor:** Previous campaign response yields an Odds Ratio of **5.5174** (prior responders have >5.5x higher odds of converting).
+
+### Complete 6-Algorithm Comparative Benchmark
+| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC | FPR | Confusion Matrix (TN / FP / FN / TP) | OOF Tuned Thresh | Tuned F1 | FPR @ Rec=70% | CV PR-AUC (Mean ± Std) | CV ROC-AUC (Mean ± Std) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Logistic Regression** | 0.872 | 0.7874 | 0.4975 | 0.6098 | 0.8759 | 0.7286 | 0.0338 | 772 / 27 / 101 / 100 | 0.30 | 0.6575 | 0.1026 | 0.7223 ± 0.0267 | 0.8883 ± 0.0104 |
+| **Gradient Boosting** | 0.872 | 0.8017 | 0.4826 | 0.6025 | 0.8740 | 0.7135 | 0.0300 | 775 / 24 / 104 / 97 | 0.29 | 0.6540 | 0.1214 | 0.7169 ± 0.0254 | 0.8845 ± 0.0075 |
+| **Random Forest** | 0.872 | 0.8230 | 0.4627 | 0.5924 | 0.8744 | 0.7105 | 0.0250 | 779 / 20 / 108 / 93 | 0.28 | 0.6339 | 0.1289 | 0.7143 ± 0.0249 | 0.8819 ± 0.0102 |
+| **K-Nearest Neighbors** | 0.846 | 0.7901 | 0.3184 | 0.4539 | 0.8580 | 0.6527 | 0.0213 | 782 / 17 / 137 / 64 | 0.25 | 0.6199 | 0.1502 | 0.6887 ± 0.0291 | 0.8663 ± 0.0131 |
+| **Naive Bayes** | 0.853 | 0.6484 | 0.5871 | 0.6162 | 0.8669 | 0.7007 | 0.0801 | 735 / 64 / 83 / 118 | 0.40 | 0.6087 | 0.1489 | 0.6816 ± 0.0346 | 0.8757 ± 0.0141 |
+| **Decision Tree** | 0.847 | 0.7000 | 0.4179 | 0.5234 | 0.8353 | 0.6195 | 0.0451 | 763 / 36 / 117 / 84 | 0.27 | 0.5885 | 0.2003 | 0.6051 ± 0.0276 | 0.8382 ± 0.0113 |
+
+---
+
+## ⚖️ Class Imbalance Treatments Comparison
+| Imbalance Treatment | 5-Fold CV PR-AUC (Mean ± Std) | 5-Fold CV ROC-AUC (Mean ± Std) | Test PR-AUC | Test ROC-AUC | Test F1 (at 0.50) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **None (Unweighted Baseline)** | 0.7223 ± 0.0267 | 0.8883 ± 0.0104 | 0.7286 | 0.8759 | 0.6098 |
+| **class_weight='balanced'** | 0.7204 ± 0.0275 | 0.8878 ± 0.0107 | 0.7297 | 0.8769 | 0.6090 |
+| **SMOTENC (Categorical-aware Oversampling)** | 0.7153 ± 0.0188 | 0.8843 ± 0.0108 | 0.7250 | 0.8777 | 0.6142 |
+
+*Imbalance Handling Finding:* Reweighting and SMOTENC do not improve ranking quality (PR-AUC remains virtually identical: 0.7223 vs 0.7204 vs 0.7153). Oversampling shifts predicted probabilities upward, which can be achieved cleanly via threshold optimization without distorting probability calibration.
+
+---
+
+## 🏗️ Project Architecture
 
 ```
 marketing-campaign-response/
 ├── data/
 │   └── campaign_data.csv            # 5,000 customer records with realistic distributions
 ├── notebooks/
-│   └── analysis.ipynb               # Fully executed end-to-end narrative Jupyter notebook
+│   └── analysis.ipynb               # Fully executed Jupyter notebook with live tables
 ├── src/
 │   ├── generate_data.py             # Realistic synthetic data generator
-│   ├── preprocess.py                # Leakage-free ColumnTransformer & IQRCapper pipeline
-│   ├── eda.py                       # Automated EDA and visualization generator
-│   ├── train.py                     # Main orchestrator (CV tuning, simulations, serialization)
-│   ├── evaluate.py                  # Benchmark suite, threshold tuning, ROI simulations
+│   ├── preprocess.py                # Leakage-free ColumnTransformer & IQRCapper
+│   ├── eda.py                       # Automated EDA and visualization suite
+│   ├── train.py                     # Main orchestrator (CV, OOF thresholds, FrozenEstimator)
+│   ├── evaluate.py                  # Evaluation suite, bootstrap CIs, 4-strategy simulation
+│   ├── build_report.py              # Dynamic markdown generator sourced from metrics.json
 │   └── build_notebook.py            # Automated notebook compilation script
 ├── models/
-│   ├── best_model.joblib            # Serialized best model pipeline (Gradient Boosting)
+│   ├── best_model.joblib            # Serialized best model pipeline
 │   ├── preprocessor.joblib          # Standalone fitted ColumnTransformer
 │   ├── metrics.json                 # Complete performance metrics and simulation numbers
-│   └── feature_list.json            # Exact schema column metadata
+│   └── feature_list.json            # Feature schema metadata
 ├── reports/
-│   ├── figures/                     # 16 high-resolution publication PNG charts
-│   │   ├── eda_target_distribution.png
-│   │   ├── eda_response_rates_breakdown.png
-│   │   ├── eda_numeric_distributions_boxplots.png
-│   │   ├── eda_correlation_heatmap.png
-│   │   ├── metrics_comparison_bar.png
-│   │   ├── roc_curves_all_models.png
-│   │   ├── pr_curves_all_models.png
-│   │   ├── confusion_matrices_grid.png
-│   │   ├── threshold_tuning.png
-│   │   ├── business_simulation_roi.png
-│   │   ├── cumulative_gains_lift.png
-│   │   ├── calibration_curve.png
-│   │   ├── feature_importance_tree.png
-│   │   ├── feature_importance_permutation.png
-│   │   ├── feature_importance_odds_ratios.png
-│   │   └── shap_summary.png
+│   ├── figures/                     # 16 publication-quality charts (PNG)
 │   ├── results_comparison.csv       # Benchmark table across all 6 models
-│   ├── imbalance_handling_comparison.csv # With vs without SMOTE comparison
-│   ├── business_simulation.csv      # Financial impact comparison table
-│   ├── customer_profiles.csv        # Responder vs Non-Responder average attributes
+│   ├── imbalance_handling_comparison.csv # None vs balanced vs SMOTENC comparison
+│   ├── business_simulation.csv      # 4-strategy economic evaluation table
+│   ├── customer_profiles.csv        # Actual vs predicted responder averages & medians
 │   └── final_report.md              # Full academic & management report
+├── tests/
+│   ├── test_app.py                  # Streamlit AppTest suite (load, predict, batch)
+│   └── verify_consistency.py        # Automated consistency verification script
 ├── app.py                           # Interactive Streamlit Web Application
-├── requirements.txt                 # Pinned dependencies
+├── requirements.txt                 # Exact pinned dependencies
 └── README.md                        # Documentation and replication guide
 ```
 
@@ -77,86 +101,25 @@ marketing-campaign-response/
 
 ## ⚙️ Quickstart & Execution
 
-### 1. Prerequisites & Environment Setup
-Clone or navigate to the project directory:
-```bash
-cd /Users/ved/.gemini/antigravity-ide/scratch/marketing-campaign-response
-```
-
-Create and activate a virtual environment:
+### 1. Environment Setup
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. One-Command Complete Execution
-To generate data (if absent), run full EDA, train and tune all 6 algorithms via 5-fold cross-validation, run threshold tuning, execute business simulations, and export all plots and model artifacts:
+### 2. Run Complete Pipeline (End-to-End)
 ```bash
 python src/train.py
 ```
 
-### 3. Launching the Interactive Streamlit Web App
-Launch the interactive web application:
+### 3. Launch Streamlit Web Application
 ```bash
 streamlit run app.py
 ```
-Open your browser at `http://localhost:8501`.
 
-#### Web Application Features:
-- **Tab 1: Single Customer Scoring:** Adjust all 8 behavioral inputs and view instant real-time predictions, probability progress gauges, and actionable marketing recommendations.
-- **Tab 2: Algorithm Benchmark & Comparison:** View interactive performance metrics tables, ROC curves, PR curves, confusion matrices, and the business simulation.
-- **Tab 3: Feature Importance & Insights:** Explore Tree MDI, Permutation Importance, Logistic Odds Ratios, SHAP summary plots, and persona profiles.
-- **Tab 4: Batch CSV Scoring:** Upload any customer CSV, validate schema, generate predictions, and export scored CSV files with calculated response probabilities.
-
----
-
-## 🔬 Benchmark Comparison Across All 6 Algorithms
-
-All models were evaluated under identical 5-fold Stratified Cross-Validation with SMOTE oversampling embedded strictly in the training folds. Metrics on the 1,000-customer held-out test set:
-
-| Algorithm | Accuracy | Precision | Recall | F1-Score | ROC-AUC | FPR | 5-Fold CV F1 | 5-Fold CV ROC-AUC |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Gradient Boosting (Best)** | **0.8190** | **0.5467** | 0.5821 | **0.5639** | 0.8249 | **0.1214** | **0.6023 ± 0.010** | 0.8468 ± 0.006 |
-| **Naive Bayes** | 0.7630 | 0.4474 | 0.7612 | 0.5635 | 0.8364 | 0.2365 | 0.5795 ± 0.009 | 0.8564 ± 0.005 |
-| **Random Forest** | 0.7860 | 0.4775 | 0.6866 | 0.5633 | 0.8268 | 0.1890 | 0.5987 ± 0.008 | 0.8517 ± 0.004 |
-| **Logistic Regression** | 0.7650 | 0.4494 | 0.7512 | 0.5624 | **0.8389** | 0.2315 | 0.5849 ± 0.007 | **0.8620 ± 0.003** |
-| **Decision Tree** | 0.7560 | 0.4384 | 0.7612 | 0.5564 | 0.8061 | 0.2453 | 0.5666 ± 0.015 | 0.8282 ± 0.003 |
-| **K-Nearest Neighbors** | 0.7470 | 0.4293 | **0.7861** | 0.5554 | 0.8010 | 0.2628 | 0.5503 ± 0.017 | 0.8150 ± 0.012 |
-
-### Why Accuracy is Deceptive
-With a 20.14% baseline response rate, a naive dummy model predicting "No Response" achieves ~80% accuracy while failing to capture a single customer. Gradient Boosting is chosen because it achieves the highest F1-score (0.5639) and lowest False Positive Rate (12.14%), preventing wasted marketing spend.
-
----
-
-## 💡 Top 5 Campaign Response Drivers
-1. **Email Engagement Rate (`email_engagement`):** The single strongest predictor across Tree MDI, Permutation Importance, and SHAP. Responders average 61% engagement vs. 35% for non-responders (+74% higher).
-2. **Prior Campaign Response (`previous_campaign_response`):** Exponentiated Odds Ratio of **4.88**; customers who accepted prior campaigns are nearly 5x more likely to convert again.
-3. **Purchase Frequency (`purchase_frequency`):** Responders order 2.76 times per month vs. 1.81 times for non-responders (+52% higher).
-4. **Discount Usage (`discount_usage`):** Responders utilize promotional coupons on 53% of transactions vs. 40% for non-responders.
-5. **Lifetime Transaction Count (`previous_purchases`):** Reflects baseline loyalty and ongoing relationship with the brand.
-
----
-
-## 📌 Documented Assumptions
-1. **Synthetic Nature of Data:** The dataset was synthetically generated with realistic probability distributions and noise for demonstration and research purposes.
-2. **Economic Simulation Constants:**
-   - Marginal cost per contact attempt = **$5.00** (digital ad spend, SMS, mailer).
-   - Gross profit per converted responder = **$50.00** (average customer margin).
-   - Incurred costs and profits are configurable in `src/evaluate.py`.
-3. **Non-Causal Assumption:** The model estimates promotional response propensity under contact, not causal uplift (i.e. it does not isolate customers who would have purchased organically without marketing).
-
----
-
-## 🎓 College Submission Checklist
-- [x] Dataset ready and full EDA executed with 4 saved figures
-- [x] All 6 classification algorithms trained and tuned with 5-fold CV
-- [x] Accuracy, Precision, Recall, F1, ROC-AUC, FPR, and full Confusion Matrices reported
-- [x] ROC curves, PR curves, and comparison charts saved in `reports/figures/`
-- [x] Best model chosen with rigorous F1/ROC-AUC justification (not accuracy alone)
-- [x] Threshold tuning ($p^* = 0.39$) and financial ROI simulation completed
-- [x] Tree importance, permutation importance, odds ratios, SHAP, and customer profiles generated
-- [x] Interactive Streamlit app operational with all 8 inputs, tabs, and batch processing
-- [x] `reports/final_report.md` answers all 6 research questions backed by exact numbers
-- [x] Narrative Jupyter notebook `notebooks/analysis.ipynb` fully executed top-to-bottom
-- [x] `README.md` and `requirements.txt` complete and verified
+### 4. Run Automated Verification Tests
+```bash
+pytest tests/
+python tests/verify_consistency.py
+```

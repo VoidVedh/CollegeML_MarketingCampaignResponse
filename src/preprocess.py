@@ -1,7 +1,7 @@
 """
 preprocess.py
 Modular, leakage-free preprocessing pipeline using scikit-learn ColumnTransformer,
-custom IQRCapper for outlier treatment, median/mode imputation, one-hot encoding,
+custom IQRCapper for continuous outlier treatment, imputation, one-hot encoding,
 and standard scaling. Reusable in training, evaluation, and Streamlit deployment.
 """
 
@@ -9,7 +9,7 @@ import os
 import joblib
 import numpy as np
 import pandas as pd
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict, Any
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -29,23 +29,35 @@ FEATURE_COLUMNS = [
     'discount_usage'
 ]
 
+# Partitioning features strictly by statistical treatment
 CATEGORICAL_FEATURES = ['age_group']
-NUMERIC_FEATURES = [
+
+# Continuous features requiring outlier capping and scaling
+CONTINUOUS_FEATURES = [
     'income',
     'previous_purchases',
     'purchase_frequency',
-    'previous_campaign_response',
     'website_visits',
     'email_engagement',
     'discount_usage'
 ]
+
+# Binary features (must NOT be clipped by IQRCapper or z-score scaled)
+BINARY_FEATURES = ['previous_campaign_response']
+
+# All numeric columns combined (continuous + binary)
+NUMERIC_FEATURES = CONTINUOUS_FEATURES + BINARY_FEATURES
 TARGET_COLUMN = 'responded'
+
+# Valid discrete categories
+VALID_AGE_GROUPS = ['18-25', '26-35', '36-45', '46-55', '56+']
 
 
 class IQRCapper(BaseEstimator, TransformerMixin):
     """
-    Caps numeric outliers based on the 1.5 * Interquartile Range (IQR) rule.
+    Caps continuous numeric outliers based on the 1.5 * Interquartile Range (IQR) rule.
     Learns bounds during `fit` on training data only to prevent data leakage.
+    Provides get_feature_names_out for native scikit-learn ColumnTransformer compatibility.
     """
     def __init__(self, factor: float = 1.5):
         self.factor = factor
@@ -67,17 +79,30 @@ class IQRCapper(BaseEstimator, TransformerMixin):
             raise ValueError("IQRCapper must be fitted before transform.")
         return np.clip(X_arr, self.lower_bounds_, self.upper_bounds_)
 
+    def get_feature_names_out(self, input_features=None):
+        """Scikit-learn compliant feature names output."""
+        if input_features is None:
+            if self.lower_bounds_ is not None:
+                return np.array([f"feature_{i}" for i in range(len(self.lower_bounds_))], dtype=object)
+            return np.array([], dtype=object)
+        return np.asarray(input_features, dtype=object)
+
 
 def create_preprocessor() -> ColumnTransformer:
     """
     Creates and returns an unfitted scikit-learn ColumnTransformer.
-    - Numeric: Median Imputer -> IQRCapper -> StandardScaler
-    - Categorical: Mode Imputer -> OneHotEncoder(drop='first' or handle_unknown='ignore')
+    - Continuous: Median Imputer -> IQRCapper -> StandardScaler
+    - Binary: Mode Imputer (no capping, no scaling - preserved as 0/1)
+    - Categorical: Mode Imputer -> OneHotEncoder(drop='first', sparse_output=False)
     """
-    numeric_pipeline = Pipeline([
+    continuous_pipeline = Pipeline([
         ('imputer', SimpleImputer(strategy='median')),
         ('outlier_capper', IQRCapper(factor=1.5)),
         ('scaler', StandardScaler())
+    ])
+
+    binary_pipeline = Pipeline([
+        ('imputer', SimpleImputer(strategy='most_frequent'))
     ])
 
     categorical_pipeline = Pipeline([
@@ -87,7 +112,8 @@ def create_preprocessor() -> ColumnTransformer:
 
     preprocessor = ColumnTransformer(
         transformers=[
-            ('num', numeric_pipeline, NUMERIC_FEATURES),
+            ('cont', continuous_pipeline, CONTINUOUS_FEATURES),
+            ('bin', binary_pipeline, BINARY_FEATURES),
             ('cat', categorical_pipeline, CATEGORICAL_FEATURES)
         ],
         remainder='drop',
@@ -96,10 +122,14 @@ def create_preprocessor() -> ColumnTransformer:
     return preprocessor
 
 
-def validate_schema(df: pd.DataFrame, require_target: bool = True) -> pd.DataFrame:
+def validate_schema(df: pd.DataFrame, require_target: bool = True) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Validates that a DataFrame conforms to the expected feature schema.
-    Converts and sanitizes data types where possible.
+    Preserves NaN in categorical columns rather than converting to string 'nan'.
+    Audits missing values, out-of-range anomalies, and unknown categories.
+    
+    Returns:
+        (sanitized_df, audit_report_dict)
     """
     missing_cols = [col for col in FEATURE_COLUMNS if col not in df.columns]
     if missing_cols:
@@ -109,36 +139,102 @@ def validate_schema(df: pd.DataFrame, require_target: bool = True) -> pd.DataFra
         raise ValueError(f"Uploaded data missing target column '{TARGET_COLUMN}'")
         
     df_clean = df.copy()
+    audit_report = {
+        'total_rows': len(df_clean),
+        'missing_rows': {},
+        'out_of_range_rows': {},
+        'unknown_categories': {}
+    }
     
-    # Standardize string inputs
-    df_clean['age_group'] = df_clean['age_group'].astype(str).str.strip()
+    # 1. Categorical handling: Preserve NaN properly
+    raw_age = df_clean['age_group']
+    missing_age_mask = raw_age.isna() | raw_age.astype(str).str.strip().str.lower().isin(['nan', 'none', '', 'null', '<na>'])
     
-    # Ensure numeric types
-    for col in NUMERIC_FEATURES:
+    # Standardize non-missing age values
+    def clean_age(val):
+        if pd.isna(val):
+            return np.nan
+        s = str(val).strip()
+        if s.lower() in ['nan', 'none', '', 'null', '<na>']:
+            return np.nan
+        return s
+
+    df_clean['age_group'] = df_clean['age_group'].apply(clean_age)
+    
+    if missing_age_mask.any():
+        audit_report['missing_rows']['age_group'] = int(missing_age_mask.sum())
+        
+    unknown_age_mask = df_clean['age_group'].notna() & (~df_clean['age_group'].isin(VALID_AGE_GROUPS))
+    if unknown_age_mask.any():
+        audit_report['unknown_categories']['age_group'] = int(unknown_age_mask.sum())
+        # Set unknown categories to NaN so imputer handles them with mode
+        df_clean.loc[unknown_age_mask, 'age_group'] = np.nan
+    
+    # 2. Continuous and Binary Numeric handling
+    for col in CONTINUOUS_FEATURES:
         df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+        miss_count = int(df_clean[col].isna().sum())
+        if miss_count > 0:
+            audit_report['missing_rows'][col] = miss_count
+            
+        # Range sanity checks
+        if col in ['email_engagement', 'discount_usage']:
+            out_mask = (df_clean[col] < 0.0) | (df_clean[col] > 1.0)
+            if out_mask.any():
+                audit_report['out_of_range_rows'][col] = int(out_mask.sum())
+                df_clean[col] = np.clip(df_clean[col], 0.0, 1.0)
+        elif col in ['income', 'previous_purchases', 'purchase_frequency', 'website_visits']:
+            out_mask = df_clean[col] < 0.0
+            if out_mask.any():
+                audit_report['out_of_range_rows'][col] = int(out_mask.sum())
+                df_clean.loc[out_mask, col] = 0.0
+                
+    # 3. Binary feature: previous_campaign_response
+    df_clean['previous_campaign_response'] = pd.to_numeric(df_clean['previous_campaign_response'], errors='coerce')
+    miss_bin = int(df_clean['previous_campaign_response'].isna().sum())
+    if miss_bin > 0:
+        audit_report['missing_rows']['previous_campaign_response'] = miss_bin
+        
+    out_bin = ~df_clean['previous_campaign_response'].isna() & ~df_clean['previous_campaign_response'].isin([0, 1])
+    if out_bin.any():
+        audit_report['out_of_range_rows']['previous_campaign_response'] = int(out_bin.sum())
+        df_clean.loc[out_bin, 'previous_campaign_response'] = (df_clean.loc[out_bin, 'previous_campaign_response'] > 0.5).astype(float)
         
     if require_target and TARGET_COLUMN in df_clean.columns:
-        df_clean[TARGET_COLUMN] = pd.to_numeric(df_clean[TARGET_COLUMN], errors='coerce').astype(int)
+        df_clean[TARGET_COLUMN] = pd.to_numeric(df_clean[TARGET_COLUMN], errors='coerce').fillna(0).astype(int)
         
-    return df_clean
+    return df_clean, audit_report
 
 
 def load_and_split_data(
-    filepath: str = "data/campaign_data.csv",
+    filepath: str = None,
     test_size: float = 0.2,
     random_state: int = 42
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Loads dataset, validates schema, and performs stratified 80/20 train/test split.
     """
+    if filepath is None:
+        candidates = [
+            "data/campaign_data.csv",
+            "../data/campaign_data.csv",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "campaign_data.csv")
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                filepath = os.path.abspath(c)
+                break
+        if filepath is None:
+            filepath = "data/campaign_data.csv"
+            
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Dataset not found at {filepath}")
         
     df = pd.read_csv(filepath)
-    df = validate_schema(df, require_target=True)
+    df_clean, _ = validate_schema(df, require_target=True)
     
-    X = df[FEATURE_COLUMNS]
-    y = df[TARGET_COLUMN]
+    X = df_clean[FEATURE_COLUMNS]
+    y = df_clean[TARGET_COLUMN]
     
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
@@ -152,21 +248,34 @@ def load_and_split_data(
 
 def get_feature_names(preprocessor: ColumnTransformer) -> List[str]:
     """
-    Extracts output feature names from a fitted ColumnTransformer.
+    Extracts output feature names from a fitted ColumnTransformer natively.
     """
-    try:
-        return list(preprocessor.get_feature_names_out())
-    except Exception:
-        # Fallback manual reconstruction
-        cat_encoder = preprocessor.named_transformers_['cat'].named_steps['encoder']
-        cat_names = list(cat_encoder.get_feature_names_out(CATEGORICAL_FEATURES))
-        return NUMERIC_FEATURES + cat_names
+    return list(preprocessor.get_feature_names_out())
+
+
+def unit_test_preprocessing(filepath: str = None):
+    """
+    Automated verification unit test:
+    Ensures no transformed numeric column has zero variance and that
+    previous_campaign_response flows through with binary variance intact.
+    """
+    X_train, X_test, y_train, y_test = load_and_split_data(filepath=filepath)
+    prep = create_preprocessor()
+    X_trans = prep.fit_transform(X_train)
+    feature_names = get_feature_names(prep)
+    
+    variances = np.var(X_trans, axis=0)
+    for name, var in zip(feature_names, variances):
+        assert var > 0.0, f"Defect detected: Column '{name}' has zero variance ({var})!"
+        
+    # Verify previous_campaign_response values
+    bin_idx = feature_names.index('previous_campaign_response')
+    bin_vals = np.unique(X_trans[:, bin_idx])
+    assert set(bin_vals).issubset({0.0, 1.0}), f"previous_campaign_response contains invalid values: {bin_vals}"
+    assert variances[bin_idx] > 0.05, f"previous_campaign_response has suspiciously low variance: {variances[bin_idx]}"
+    print("PASS: Preprocessing unit tests passed (no zero-variance columns, binary feature intact).")
+    return True
 
 
 if __name__ == "__main__":
-    X_train, X_test, y_train, y_test = load_and_split_data()
-    prep = create_preprocessor()
-    X_train_trans = prep.fit_transform(X_train)
-    feature_names = get_feature_names(prep)
-    print(f"X_train shape: {X_train.shape} -> Transformed shape: {X_train_trans.shape}")
-    print(f"Features: {feature_names}")
+    unit_test_preprocessing()

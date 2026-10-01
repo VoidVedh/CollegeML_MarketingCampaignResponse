@@ -1,21 +1,22 @@
 # Core Machine Learning & Data Processing
-numpy>=2.0.0,<=2.5.1
-pandas>=2.2.0,<=3.0.5
-scikit-learn>=1.5.0,<=1.9.0
-imbalanced-learn>=0.12.0,<=0.14.2
-scipy>=1.13.0
+numpy==2.5.1
+pandas==3.0.5
+scipy==1.18.0
+scikit-learn==1.9.0
+imbalanced-learn==0.14.2
 
 # Visualization & Reporting
-matplotlib>=3.9.0,<=3.11.1
-seaborn>=0.13.0,<=0.13.2
+matplotlib==3.11.1
+seaborn==0.13.2
 
 # Serialization & Explainability
-joblib>=1.4.0,<=1.5.3
-shap>=0.45.0,<=0.52.0
+joblib==1.5.3
+shap==0.52.0
 
 # Interactive Application
-streamlit>=1.38.0,<=1.64.0
+streamlit==1.64.0
 
-# Notebook Execution
-nbconvert>=7.16.0,<=7.17.1
-ipykernel>=6.29.0
+# Notebook Execution & Verification
+nbformat==5.10.4
+nbconvert==7.17.1
+ipykernel==7.4.0

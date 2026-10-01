@@ -9,14 +9,16 @@
     "email_engagement",
     "discount_usage"
   ],
-  "numeric_features": [
+  "continuous_features": [
     "income",
     "previous_purchases",
     "purchase_frequency",
-    "previous_campaign_response",
     "website_visits",
     "email_engagement",
     "discount_usage"
+  ],
+  "binary_features": [
+    "previous_campaign_response"
   ],
   "categorical_features": [
     "age_group"
@@ -25,10 +27,10 @@
     "income",
     "previous_purchases",
     "purchase_frequency",
-    "previous_campaign_response",
     "website_visits",
     "email_engagement",
     "discount_usage",
+    "previous_campaign_response",
     "age_group_26-35",
     "age_group_36-45",
     "age_group_46-55",

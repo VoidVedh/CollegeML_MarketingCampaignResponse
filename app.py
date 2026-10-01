@@ -5,11 +5,13 @@ Marketing Campaign Response Prediction Using Machine Learning
 
 Features:
 - Real-time customer response prediction with interactive parameter adjustments.
-- Color-coded decision badge ("Will Respond" / "Will Not Respond") based on optimized threshold.
-- Probability gauges and actionable marketing recommendations.
+- State persistence: prediction results remain in st.session_state across widget interactions.
+- Dynamic threshold slider with on_click callback to reset to profit-optimal threshold.
+- Color-coded decision badge ("Will Respond" / "Will Not Respond") based on chosen threshold.
+- Probability gauges, unit economics loaded from metrics.json, and actionable recommendations.
 - Interactive Model Comparison tab with real performance tables and evaluation curves.
 - Feature Importance & Interpretability tab with SHAP, Odds Ratios, and Tree Importance.
-- Batch Prediction tab allowing CSV upload, validation, prediction scoring, and CSV export.
+- Batch Prediction tab with schema validation, NaN preservation, audit warnings, and CSV export.
 """
 
 import os
@@ -25,10 +27,10 @@ PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# Import IQRCapper for unpickling compatibility
+# Import IQRCapper and preprocessing functions
 from src.preprocess import (
-    IQRCapper, FEATURE_COLUMNS, NUMERIC_FEATURES,
-    CATEGORICAL_FEATURES, validate_schema
+    IQRCapper, FEATURE_COLUMNS, CONTINUOUS_FEATURES,
+    BINARY_FEATURES, CATEGORICAL_FEATURES, validate_schema
 )
 
 # Page configuration
@@ -104,33 +106,33 @@ st.markdown("""
 
 @st.cache_resource
 def load_model_artifacts():
-    """
-    Loads saved model pipeline, preprocessor, and metrics metadata.
-    """
+    """Loads and caches the deployed ML pipeline and metadata."""
     model_path = os.path.join(PROJECT_ROOT, "models", "best_model.joblib")
     metrics_path = os.path.join(PROJECT_ROOT, "models", "metrics.json")
     feature_path = os.path.join(PROJECT_ROOT, "models", "feature_list.json")
     
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found at '{model_path}'. Please run 'python src/train.py' first.")
+        raise FileNotFoundError(f"Model file not found at {model_path}. Please execute 'python src/train.py' first.")
         
     model = joblib.load(model_path)
     
-    with open(metrics_path, 'r') as f:
-        metrics = json.load(f)
-        
-    with open(feature_path, 'r') as f:
-        features = json.load(f)
-        
+    metrics = {}
+    if os.path.exists(metrics_path):
+        with open(metrics_path, 'r') as f:
+            metrics = json.load(f)
+            
+    features = {}
+    if os.path.exists(feature_path):
+        with open(feature_path, 'r') as f:
+            features = json.load(f)
+            
     return model, metrics, features
 
 
 def predict_single_customer(model, customer_data: dict, threshold: float):
-    """
-    Predicts response probability and class for a single customer dictionary.
-    """
+    """Predicts response probability and class for a single customer dictionary."""
     df_input = pd.DataFrame([customer_data])
-    proba = model.predict_proba(df_input)[0, 1]
+    proba = float(model.predict_proba(df_input)[0, 1])
     prediction = int(proba >= threshold)
     return prediction, proba
 
@@ -138,40 +140,58 @@ def predict_single_customer(model, customer_data: dict, threshold: float):
 # Load artifacts
 try:
     best_model, metrics_meta, feature_meta = load_model_artifacts()
-    opt_threshold = metrics_meta.get('optimal_threshold', 0.50)
-    best_model_name = metrics_meta.get('best_model_name', 'Best Model')
+    # Profit-optimal threshold deployed by default
+    opt_threshold = float(metrics_meta.get('profit_optimal_threshold', metrics_meta.get('optimal_threshold', 0.07)))
+    f1_threshold = float(metrics_meta.get('f1_optimal_threshold', 0.30))
+    best_model_name = metrics_meta.get('deployed_model_name', metrics_meta.get('best_model_name', 'Best Model'))
+    cost_per_contact = float(metrics_meta.get('economic_parameters', {}).get('cost_per_contact', 5.0))
+    profit_per_responder = float(metrics_meta.get('economic_parameters', {}).get('profit_per_responder', 50.0))
 except Exception as e:
     st.error(f"Error loading model artifacts: {e}")
     st.stop()
+
+
+# Session State Initialization
+if "threshold_slider" not in st.session_state:
+    st.session_state.threshold_slider = opt_threshold
+
+if "single_prediction" not in st.session_state:
+    st.session_state.single_prediction = None
+
+
+def reset_to_optimal_threshold():
+    """Callback to reset threshold slider to optimal value."""
+    st.session_state.threshold_slider = opt_threshold
 
 
 # -------------------------------------------------------------
 # SIDEBAR
 # -------------------------------------------------------------
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/bullseye.png", width=64)
-    st.title("Campaign Analytics")
+    st.markdown("# 🎯 Campaign Analytics")
     st.markdown("Automated targeting engine to optimize marketing ROI and minimize wasted ad expenditure.")
     
     st.markdown("---")
     st.subheader("Model Specifications")
     st.markdown(f"**Deployed Model:** `{best_model_name}`")
-    st.markdown(f"**Optimal Threshold:** `{opt_threshold:.2f}`")
-    st.markdown(f"**Default Threshold:** `0.50`")
+    st.markdown(f"**Profit-Optimal Threshold:** `{opt_threshold:.2f}` (Default)")
+    st.markdown(f"**F1-Optimal Threshold:** `{f1_threshold:.2f}`")
+    st.markdown(f"**Standard Default:** `0.50`")
+    st.markdown(f"**Unit Contact Cost:** `${cost_per_contact:.2f}`")
+    st.markdown(f"**Profit per Responder:** `${profit_per_responder:.2f}`")
     
     st.markdown("---")
     st.subheader("Decision Threshold Controller")
     selected_threshold = st.slider(
         "Operating Threshold",
-        min_value=0.10,
-        max_value=0.90,
-        value=float(opt_threshold),
+        min_value=0.01,
+        max_value=0.95,
         step=0.01,
-        help="Higher thresholds reduce False Positives (wasted ad budget); lower thresholds capture more total responders."
+        key="threshold_slider",
+        help="Lower thresholds contact more customers (profit-optimal); higher thresholds contact fewer (precision-focused)."
     )
     
-    if st.button("Reset to Optimal Threshold"):
-        selected_threshold = float(opt_threshold)
+    st.button("🔄 Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold)
         
     st.markdown("---")
     st.caption("College ML Submission Project • End-to-End Predictive Analytics")
@@ -218,38 +238,39 @@ with tab_single:
             help="Annual household income (numeric, roughly $15k-$150k)."
         )
         previous_purchases = st.number_input(
-            "Historical Total Purchases",
+            "Lifetime Previous Purchases",
             min_value=0,
-            max_value=150,
-            value=8,
+            max_value=100,
+            value=7,
             step=1,
-            help="Total lifetime purchase transactions completed."
+            help="Total historical order count across lifetime."
         )
         
     with col2:
-        purchase_frequency = st.slider(
-            "Purchase Frequency (Purchases/Month)",
+        purchase_frequency = st.number_input(
+            "Purchase Frequency (orders/month)",
             min_value=0.0,
-            max_value=12.0,
-            value=2.5,
-            step=0.1,
-            help="Average monthly transaction frequency."
+            max_value=20.0,
+            value=2.0,
+            step=0.25,
+            format="%.2f",
+            help="Monthly order cadence velocity."
         )
-        prev_resp_choice = st.selectbox(
+        previous_campaign_response = st.radio(
             "Responded to Previous Campaign?",
-            options=["No", "Yes"],
+            options=[0, 1],
+            format_func=lambda x: "Yes (1)" if x == 1 else "No (0)",
             index=0,
-            help="Historical indicator: did the customer accept the prior promotional campaign?"
+            horizontal=True,
+            help="Did this customer respond to the previous promotional campaign?"
         )
-        previous_campaign_response = 1 if prev_resp_choice == "Yes" else 0
-        
-        website_visits = st.number_input(
+        website_visits = st.slider(
             "Monthly Website Visits",
             min_value=0,
-            max_value=60,
-            value=7,
+            max_value=40,
+            value=8,
             step=1,
-            help="Total visits to company web/mobile portals in the past 30 days."
+            help="Number of web/app browsing sessions in the past 30 days."
         )
         
     with col3:
@@ -271,7 +292,7 @@ with tab_single:
         )
 
     st.markdown("<br>", unsafe_allow_html=True)
-    predict_btn = st.button("🚀 Predict Campaign Response", type="primary", use_container_width=True)
+    predict_btn = st.button("🚀 Predict Campaign Response", type="primary")
     
     if predict_btn:
         customer_data = {
@@ -288,53 +309,66 @@ with tab_single:
         try:
             pred_class, proba = predict_single_customer(best_model, customer_data, selected_threshold)
             
-            st.markdown("---")
-            st.subheader("🎯 Prediction Result & Marketing Recommendation")
-            
-            res_col1, res_col2 = st.columns([1, 2])
-            
-            with res_col1:
-                st.markdown("#### Outcome Classification")
-                if pred_class == 1:
-                    st.markdown('<div class="badge-respond">✅ WILL RESPOND</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown('<div class="badge-no-respond">❌ WILL NOT RESPOND</div>', unsafe_allow_html=True)
-                    
-                st.markdown(f"**Predicted Response Probability:** `{proba*100:.1f}%`")
-                st.markdown(f"**Classification Threshold:** `{selected_threshold:.2f}`")
+            # Key Drivers analysis
+            drivers = []
+            if previous_campaign_response == 1:
+                drivers.append("Strong positive history (prior campaign conversion - 5.5x odds multiplier)")
+            if email_engagement >= 0.50:
+                drivers.append("High digital email responsiveness")
+            if purchase_frequency >= 2.5:
+                drivers.append("Frequent recurring purchaser (high brand engagement)")
+            if discount_usage >= 0.45:
+                drivers.append("Promotional/deal-sensitive customer profile")
                 
-                # Visual probability gauge
-                st.progress(float(proba))
-                
-            with res_col2:
-                st.markdown("#### Actionable Strategy")
-                if pred_class == 1:
-                    recommendation = "🌟 **High-Value Target:** Allocate campaign budget to contact this customer. High probability of conversion offsets acquisition cost. Provide personalized, time-limited promotional incentives."
-                else:
-                    recommendation = "🛑 **Suppression Recommended:** Suppress this customer from direct outreach to eliminate wasted marketing budget ($5.00 saved per customer). Funnel into low-cost organic email nurture streams instead."
-                    
-                st.markdown(f'<div class="recommendation-box">{recommendation}</div>', unsafe_allow_html=True)
-                
-                # Key Drivers analysis for this customer
-                drivers = []
-                if previous_campaign_response == 1:
-                    drivers.append("Strong positive history (prior campaign conversion)")
-                if email_engagement >= 0.50:
-                    drivers.append("High digital email responsiveness")
-                if purchase_frequency >= 3.0:
-                    drivers.append("Frequent recurring purchaser")
-                if discount_usage >= 0.50:
-                    drivers.append("Promotional/deal-sensitive customer profile")
-                    
-                if drivers:
-                    st.markdown("**Dominant Propensity Drivers:**")
-                    for d in drivers:
-                        st.markdown(f"- {d}")
-                else:
-                    st.markdown("**Dominant Propensity Drivers:** Baseline behavioral signals indicate low engagement across promotional touchpoints.")
-                    
+            st.session_state.single_prediction = {
+                'pred_class': pred_class,
+                'proba': proba,
+                'threshold': selected_threshold,
+                'drivers': drivers
+            }
         except Exception as err:
             st.error(f"Prediction encountered an error: {err}")
+
+    # Render persisted prediction from session_state
+    if st.session_state.single_prediction is not None:
+        p_res = st.session_state.single_prediction
+        pred_class = int(p_res['proba'] >= selected_threshold)
+        proba = p_res['proba']
+        
+        st.markdown("---")
+        st.subheader("🎯 Prediction Result & Marketing Recommendation")
+        
+        res_col1, res_col2 = st.columns([1, 2])
+        
+        with res_col1:
+            st.markdown("#### Outcome Classification")
+            if pred_class == 1:
+                st.markdown('<div class="badge-respond">✅ WILL RESPOND</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="badge-no-respond">❌ WILL NOT RESPOND</div>', unsafe_allow_html=True)
+                
+            st.markdown(f"**Predicted Response Probability:** `{proba*100:.2f}%`")
+            st.caption(f"Evaluated against Operating Threshold: **{selected_threshold:.2f}**")
+            
+            # Visual probability gauge
+            st.progress(min(max(float(proba), 0.0), 1.0))
+            
+        with res_col2:
+            st.markdown("#### Actionable Commercial Strategy")
+            if pred_class == 1:
+                recommendation = f"🌟 **Target Customer:** Allocate budget to contact this customer. Expected return exceeds marginal cost of ${cost_per_contact:.2f}. Provide personalized, high-relevance promotional offer."
+            else:
+                recommendation = f"🛑 **Suppression Recommended:** Suppress this customer from paid direct outreach (${cost_per_contact:.2f} saved per customer). Funnel into low-cost organic nurture streams instead."
+                
+            st.markdown(f'<div class="recommendation-box">{recommendation}</div>', unsafe_allow_html=True)
+            
+            drivers = p_res.get('drivers', [])
+            if drivers:
+                st.markdown("**Dominant Propensity Drivers:**")
+                for d in drivers:
+                    st.markdown(f"- {d}")
+            else:
+                st.markdown("**Dominant Propensity Drivers:** Baseline behavioral signals indicate lower engagement across promotional touchpoints.")
 
 
 # -------------------------------------------------------------
@@ -342,20 +376,23 @@ with tab_single:
 # -------------------------------------------------------------
 with tab_comparison:
     st.markdown("### Comprehensive Benchmark: 6 Machine Learning Algorithms")
-    st.markdown("Comparison across Accuracy, Precision, Recall, F1-Score, ROC-AUC, and False Positive Rate (FPR) on the held-out test set.")
+    st.markdown("Evaluation across 5-Fold Stratified Cross-Validation (mean ± std) and held-out test set performance.")
     
     comp_csv_path = os.path.join(PROJECT_ROOT, "reports", "results_comparison.csv")
     if os.path.exists(comp_csv_path):
         results_df = pd.read_csv(comp_csv_path)
         
         # Display formatted table
-        display_df = results_df[['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'FPR', 'CV_F1_Mean']].copy()
-        for col in ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'FPR', 'CV_F1_Mean']:
-            display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}")
-            
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        cols_to_show = ['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC', 'FPR', 'FPR_at_Recall_70', 'CV_PR_AUC_Mean', 'CV_ROC_AUC_Mean']
+        present_cols = [c for c in cols_to_show if c in results_df.columns]
+        display_df = results_df[present_cols].copy()
         
-        st.info("💡 **Why Accuracy is Misleading:** With an imbalanced target (~20% response rate), a naive model predicting 'No Response' for everyone achieves 80% accuracy but catches 0% of responders. Our winner is chosen based on F1-Score and ROC-AUC balance.")
+        for col in present_cols[1:]:
+            display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if isinstance(x, (int, float)) else str(x))
+            
+        st.dataframe(display_df, hide_index=True)
+        
+        st.info("💡 **Defensible Model Selection:** With an imbalanced target (~20% response rate), models within 1 standard deviation of CV PR-AUC are statistically tied. The winner is selected based on CV PR-AUC, then tie-broken by lower FPR at 70% recall and model interpretability.")
         
     col_chart1, col_chart2 = st.columns(2)
     
@@ -363,35 +400,35 @@ with tab_comparison:
         st.markdown("#### Performance Metrics Bar Chart")
         bar_path = os.path.join(PROJECT_ROOT, "reports", "figures", "metrics_comparison_bar.png")
         if os.path.exists(bar_path):
-            st.image(bar_path, use_column_width=True)
+            st.image(bar_path, width="stretch")
             
         st.markdown("#### Precision-Recall (PR) Curves")
         pr_path = os.path.join(PROJECT_ROOT, "reports", "figures", "pr_curves_all_models.png")
         if os.path.exists(pr_path):
-            st.image(pr_path, use_column_width=True)
+            st.image(pr_path, width="stretch")
             
     with col_chart2:
         st.markdown("#### Receiver Operating Characteristic (ROC) Curves")
         roc_path = os.path.join(PROJECT_ROOT, "reports", "figures", "roc_curves_all_models.png")
         if os.path.exists(roc_path):
-            st.image(roc_path, use_column_width=True)
+            st.image(roc_path, width="stretch")
             
         st.markdown("#### Confusion Matrix Grid (All 6 Models)")
         cm_path = os.path.join(PROJECT_ROOT, "reports", "figures", "confusion_matrices_grid.png")
         if os.path.exists(cm_path):
-            st.image(cm_path, use_column_width=True)
+            st.image(cm_path, width="stretch")
 
     # Business Simulation comparison
     st.markdown("---")
-    st.markdown("### Marketing Economics Simulation: Cost vs ROI")
+    st.markdown("### Marketing Economics Simulation: Cost vs Net Profit & ROI")
     sim_csv_path = os.path.join(PROJECT_ROOT, "reports", "business_simulation.csv")
     if os.path.exists(sim_csv_path):
         sim_df = pd.read_csv(sim_csv_path)
-        st.dataframe(sim_df, use_container_width=True, hide_index=True)
+        st.dataframe(sim_df, hide_index=True)
         
     sim_img_path = os.path.join(PROJECT_ROOT, "reports", "figures", "business_simulation_roi.png")
     if os.path.exists(sim_img_path):
-        st.image(sim_img_path, use_column_width=True)
+        st.image(sim_img_path, width="stretch")
 
 
 # -------------------------------------------------------------
@@ -407,31 +444,31 @@ with tab_features:
         st.markdown("#### Tree-Based MDI Feature Importance")
         tree_fi_path = os.path.join(PROJECT_ROOT, "reports", "figures", "feature_importance_tree.png")
         if os.path.exists(tree_fi_path):
-            st.image(tree_fi_path, use_column_width=True)
+            st.image(tree_fi_path, width="stretch")
             
         st.markdown("#### Logistic Regression Odds Ratios (exp(β))")
         or_path = os.path.join(PROJECT_ROOT, "reports", "figures", "feature_importance_odds_ratios.png")
         if os.path.exists(or_path):
-            st.image(or_path, use_column_width=True)
+            st.image(or_path, width="stretch")
             
     with fcol2:
         st.markdown("#### Permutation Importance on Test Set")
         perm_path = os.path.join(PROJECT_ROOT, "reports", "figures", "feature_importance_permutation.png")
         if os.path.exists(perm_path):
-            st.image(perm_path, use_column_width=True)
+            st.image(perm_path, width="stretch")
             
         st.markdown("#### SHAP Summary Plot")
         shap_path = os.path.join(PROJECT_ROOT, "reports", "figures", "shap_summary.png")
         if os.path.exists(shap_path):
-            st.image(shap_path, use_column_width=True)
+            st.image(shap_path, width="stretch")
             
     st.markdown("---")
-    st.markdown("### Profile Comparison: Responders vs Non-Responders")
+    st.markdown("### Profile Comparison: Responders vs Non-Responders (Actual & Predicted)")
     prof_csv_path = os.path.join(PROJECT_ROOT, "reports", "customer_profiles.csv")
     if os.path.exists(prof_csv_path):
-        prof_df = pd.read_csv(prof_csv_path, index_col=0)
-        st.dataframe(prof_df, use_container_width=True)
-        st.caption("Averages and medians for predicted classes across core financial and engagement features.")
+        prof_df = pd.read_csv(prof_csv_path, header=[0, 1], index_col=0)
+        st.dataframe(prof_df)
+        st.caption("Averages and medians for actual and predicted classes across core financial and engagement features.")
 
 
 # -------------------------------------------------------------
@@ -439,7 +476,7 @@ with tab_features:
 # -------------------------------------------------------------
 with tab_batch:
     st.markdown("### Batch Customer Scoring from CSV")
-    st.markdown("Upload any CSV with the required schema to generate batch response predictions, calculated probabilities, and targeted marketing flags.")
+    st.markdown("Upload any customer CSV to generate batch predictions, response probabilities, and targeted marketing flags.")
     
     st.markdown("""
     **Required Columns:** `age_group`, `income`, `previous_purchases`, `purchase_frequency`, `previous_campaign_response`, `website_visits`, `email_engagement`, `discount_usage`
@@ -492,8 +529,30 @@ with tab_batch:
             df_upload = pd.read_csv(uploaded_file)
             st.write(f"Uploaded file contains **{len(df_upload)} records**.")
             
-            # Validate schema
-            df_clean = validate_schema(df_upload, require_target=False)
+            # Validate schema without converting NaN in age_group to string
+            df_clean, audit_report = validate_schema(df_upload, require_target=False)
+            
+            # Display audit warnings if anomalies exist
+            has_warnings = False
+            warning_messages = []
+            
+            if audit_report['missing_rows']:
+                has_warnings = True
+                miss_details = ", ".join([f"{col}: {cnt} rows" for col, cnt in audit_report['missing_rows'].items()])
+                warning_messages.append(f"**Missing values detected and imputed:** {miss_details} (handled by median/mode imputer).")
+                
+            if audit_report['out_of_range_rows']:
+                has_warnings = True
+                range_details = ", ".join([f"{col}: {cnt} rows" for col, cnt in audit_report['out_of_range_rows'].items()])
+                warning_messages.append(f"**Out-of-range values clipped to valid bounds:** {range_details}.")
+                
+            if audit_report['unknown_categories']:
+                has_warnings = True
+                cat_details = ", ".join([f"{col}: {cnt} rows" for col, cnt in audit_report['unknown_categories'].items()])
+                warning_messages.append(f"**Unknown categorical labels imputed with mode:** {cat_details}.")
+                
+            if has_warnings:
+                st.warning("⚠️ **Data Quality Audit Report:**\n\n" + "\n\n".join(warning_messages))
             
             # Predict
             probas = best_model.predict_proba(df_clean[FEATURE_COLUMNS])[:, 1]
@@ -504,18 +563,21 @@ with tab_batch:
             df_result['predicted_responded'] = preds
             df_result['decision'] = np.where(preds == 1, 'Target Customer', 'Suppress / Do Not Contact')
             
-            st.success("✅ Batch scoring completed successfully!")
+            st.success(f"✅ Batch scoring completed successfully using decision threshold {selected_threshold:.2f}!")
             
             # Summary metrics of the batch
             n_target = int(preds.sum())
-            pct_target = (n_target / len(preds)) * 100
+            pct_target = (n_target / len(preds)) * 100 if len(preds) > 0 else 0
+            cost_total = n_target * cost_per_contact
+            cost_saved = (len(preds) - n_target) * cost_per_contact
             
-            bcol1, bcol2, bcol3 = st.columns(3)
-            bcol1.metric("Total Customers Evaluated", f"{len(preds):,}")
-            bcol2.metric("Recommended for Campaign", f"{n_target:,} ({pct_target:.1f}%)")
-            bcol3.metric("Suppressed (Cost Saved)", f"{len(preds) - n_target:,}")
+            bcol1, bcol2, bcol3, bcol4 = st.columns(4)
+            bcol1.metric("Evaluated", f"{len(preds):,}")
+            bcol2.metric("Targeted", f"{n_target:,} ({pct_target:.1f}%)")
+            bcol3.metric("Campaign Spend", f"${cost_total:,.2f}")
+            bcol4.metric("Ad Spend Saved", f"${cost_saved:,.2f}")
             
-            st.dataframe(df_result.head(25), use_container_width=True)
+            st.dataframe(df_result.head(25))
             
             # Download scored CSV
             csv_export = df_result.to_csv(index=False).encode('utf-8')
