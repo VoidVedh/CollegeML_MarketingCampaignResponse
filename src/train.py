@@ -33,6 +33,8 @@ from typing import Dict, Any, Tuple
 
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, cross_val_predict, cross_val_score
 from sklearn.metrics import f1_score, roc_auc_score, average_precision_score, brier_score_loss
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.frozen import FrozenEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -300,9 +302,17 @@ def evaluate_imbalance_treatments(
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
     treatments = []
     
-    # Preprocessor output categorical indices:
-    # 6 continuous, 1 binary, 4 one-hot encoded age groups -> indices [6, 7, 8, 9, 10]
-    cat_indices = [6, 7, 8, 9, 10]
+    # Dynamically derive categorical indices from fitted preprocessor:
+    # index of 'previous_campaign_response' plus all indices whose feature names start with 'age_group_'
+    preproc_fitted = create_preprocessor().fit(X_train)
+    all_feat_names = list(preproc_fitted.get_feature_names_out())
+    if 'previous_campaign_response' not in all_feat_names:
+        raise ValueError("Feature 'previous_campaign_response' not found in preprocessor feature names.")
+    prev_idx = all_feat_names.index('previous_campaign_response')
+    age_indices = [i for i, name in enumerate(all_feat_names) if name.startswith('age_group_')]
+    if not age_indices:
+        raise ValueError("No 'age_group_' features found in preprocessor feature names.")
+    cat_indices = sorted([prev_idx] + age_indices)
     
     # Treatment 1: None
     pipe_none = Pipeline([
@@ -496,18 +506,28 @@ def run_full_pipeline(
     print("STEP 7: PROBABILITY CALIBRATION (FrozenEstimator)")
     print("="*70)
     calib_results = evaluate_probability_calibration(
-        best_model, X_train, y_train, X_test, y_test, output_dir=figures_dir
+        best_model, X_train, y_train, X_test, y_test,
+        random_state=random_state, output_dir=figures_dir
     )
     print(f"Validation Brier Score: Uncalibrated = {calib_results['brier_val_uncalibrated']:.5f} vs Calibrated = {calib_results['brier_val_calibrated']:.5f}")
     print(f"Test Brier Score:       Uncalibrated = {calib_results['brier_test_uncalibrated']:.5f} vs Calibrated = {calib_results['brier_test_calibrated']:.5f}")
     print(f"Validation Brier Improved? {calib_results['val_improved']}")
     
-    # Final deployed model selection based on validation improvement
-    if calib_results['val_improved'] and calib_results['calibrator'] is not None:
-        deployed_model = calib_results['calibrator']
+    # Deterministic deployment policy:
+    # If calibration wins on fair out-of-fold comparison, refit base pipeline on 100% of X_train,
+    # then wrap in FrozenEstimator + CalibratedClassifierCV fit via CV on X_train;
+    # otherwise refit best_model on 100% of X_train.
+    if calib_results['val_improved']:
+        best_model.fit(X_train, y_train)
+        cv_cal = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+        deployed_model = CalibratedClassifierCV(
+            estimator=FrozenEstimator(best_model),
+            method='sigmoid',
+            cv=cv_cal
+        )
+        deployed_model.fit(X_train, y_train)
         deployed_model_name = f"{winner_name} (Calibrated)"
     else:
-        # Fit winner pipeline on all training data
         best_model.fit(X_train, y_train)
         deployed_model = best_model
         deployed_model_name = winner_name
@@ -613,7 +633,7 @@ def run_full_pipeline(
     print(f"Saved feature list:   {feature_list_path}")
     print(f"Saved metrics json:   {metrics_json_path}")
     
-    # 13. Dynamic Report Generation (Defect 8)
+    # 13. Dynamic Report Generation
     print("\n" + "="*70)
     print("STEP 11: REGENERATING REPORTS DYNAMICALLY FROM METRICS")
     print("="*70)

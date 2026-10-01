@@ -14,8 +14,8 @@ In this audit and verification cycle, we built and verified an end-to-end, data-
 
 ### Key Evaluation & Selection Results
 - **Defensible Model Selection:** Statistical Tie Disclosed: The top two models, Logistic Regression (CV PR-AUC: 0.7223 ± 0.0267) and Gradient Boosting (CV PR-AUC: 0.7169 ± 0.0254), are within 1 standard deviation (0.0054 < 0.0267). Therefore, they are statistically tied on ranking performance. Logistic Regression broke the tie with lower FPR at 70% recall (0.1026 vs 0.1214).
-- **Selected Deployed Architecture:** **Logistic Regression (Calibrated)** achieving a 5-fold CV PR-AUC of **0.7223 ± 0.0267** and CV ROC-AUC of **0.8883 ± 0.0104**.
-- **Test Set Generalization:** Held-out test ROC-AUC of **0.8759** (95% CI: [0.8475, 0.9032]), PR-AUC of **0.7286** (95% CI: [0.6723, 0.7858]), and FPR at 70% recall of **0.1026** (the lowest error rate among all benchmarked models).
+- **Selected Deployed Architecture:** **Logistic Regression** achieving a 5-fold CV PR-AUC of **0.7223 ± 0.0267** and CV ROC-AUC of **0.8883 ± 0.0104**.
+- **Test Set Generalization:** Held-out test ROC-AUC of **0.8759** (95% CI: [0.8473, 0.9029]), PR-AUC of **0.7286** (95% CI: [0.6707, 0.7832]), and FPR at 70% recall of **0.1026** (the lowest error rate among all benchmarked models).
 - **Leakage-Free Dual Threshold Tuning:** Tuned exclusively on training Out-Of-Fold (OOF) cross-validation predictions:
   1. **F1-Optimal Threshold ($t = 0.30$):** Achieves test F1-score of **0.9795** (precision: 61.1%, recall: 71.1%), targeting 234 contacts for **$5,980.00 net profit** (511.1% ROI).
   2. **Profit-Optimal Threshold ($t = 0.07$):** Dictated by the economic break-even probability ($r = \text{Cost} / \text{Profit} = \$5.00 / \$50.00 = 0.10$). Targets 534 contacts, captures **183 out of 201 responders (91.0% capture rate)**, and delivers **$6,480.00 in net profit**—the maximum profit of any evaluated strategy, outperforming mass marketing by **+$1,430.00**.
@@ -104,7 +104,7 @@ In previous versions, `IQRCapper` was applied indiscriminately to all numeric fe
 1. Continuous features are isolated into `CONTINUOUS_FEATURES`; `previous_campaign_response` is placed into `BINARY_FEATURES`.
 2. `previous_campaign_response` passes through with mode imputation and zero clipping.
 3. Preprocessing unit test executes automatically: `assert (X_preprocessed.var(axis=0) > 1e-6).all()`.
-4. **Empirical Effect:** Flipping `previous_campaign_response` from 0 to 1 on a median customer increases `predict_proba` from **3.8% to 19.8%** (a **5.2x probability multiplier**). The fitted Logistic Regression odds ratio for `previous_campaign_response` is **5.5174**—drastically above 1.0!
+4. **Empirical Effect:** Flipping `previous_campaign_response` from 0 to 1 on a median customer increases `predict_proba` from **3.8% to 19.8%** (a **5.2x probability multiplier**). The fitted Logistic Regression odds ratio for `previous_campaign_response` is **5.4601**—drastically above 1.0!
 
 ---
 
@@ -186,9 +186,9 @@ The F1-score treats precision and recall with equal harmonic weight ($eta = 1$)
 
 ## 9. Probability Calibration Analysis (FrozenEstimator)
 Probability calibration maps raw model outputs to true empirical conversion probabilities. Using scikit-learn's modern `FrozenEstimator` wrapped within `CalibratedClassifierCV(method='sigmoid')`, we calibrated on a 25% holdout validation partition:
-- **Validation Brier Score:** Uncalibrated = **0.09016** vs Calibrated = **0.08986**
+- **Validation Brier Score:** Uncalibrated = **0.09016** vs Calibrated = **0.09047**
 - **Test Set Brier Score:** Uncalibrated = **0.09604** vs Calibrated = **0.09599**
-- **Deployment Decision:** Validation Brier score improved (0.09016 $\to$ 0.08986), confirming calibration efficacy. The calibrated model pipeline is saved as `models/best_model.joblib`.
+- **Deployment Decision:** Fair out-of-fold validation demonstrates that Logistic Regression (already trained with cross-entropy log-loss) is naturally well-calibrated (Validation Brier: 0.09016 uncalibrated vs 0.09047 post-hoc sigmoid). Because calibration did not improve out-of-fold Brier loss, the uncalibrated base pipeline trained on 100% of the training data is deployed as `models/best_model.joblib` per the strict deployment policy.
 
 ---
 
@@ -197,13 +197,13 @@ Probability calibration maps raw model outputs to true empirical conversion prob
 ### 10.1 Feature Importance & Odds Ratios
 | Feature Name | Logistic Regression Odds Ratio (exp(β)) | Impact Interpretation |
 | :--- | :---: | :--- |
-| `previous_campaign_response` | **5.5174** | Primary driver: prior campaign responders have >5.5x higher odds of converting |
-| `email_engagement` | **3.3052** | Strong positive driver: active email openers convert at 3.3x baseline |
-| `discount_usage` | **2.1017** | Coupon affinity doubles response odds |
-| `purchase_frequency` | **2.0026** | Transaction velocity doubles response odds |
-| `income` | **1.2401** | Moderate influence |
-| `previous_purchases` | **1.2197** | Moderate cumulative loyalty influence |
-| `website_visits` | **1.2115** | Moderate digital activity influence |
+| `previous_campaign_response` | **5.4601** | Primary driver: prior campaign responders have >5.5x higher odds of converting |
+| `email_engagement` | **3.4854** | Strong positive driver: active email openers convert at 3.3x baseline |
+| `discount_usage` | **2.1583** | Coupon affinity doubles response odds |
+| `purchase_frequency` | **2.0400** | Transaction velocity doubles response odds |
+| `income` | **1.2191** | Moderate influence |
+| `previous_purchases` | **1.2313** | Moderate cumulative loyalty influence |
+| `website_visits` | **1.2189** | Moderate digital activity influence |
 
 ### 10.2 Customer Persona Breakdown (Actual vs Predicted Responders)
 The table below displays average and median feature values across both **ground truth (Actual)** and **model classified (Predicted)** customer segments:
@@ -212,8 +212,8 @@ The table below displays average and median feature values across both **ground 
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | Actual Non-Responder | 37.0% (med 35.0%) | 1.85 (med 1.6) | 10.0% (med 0.0%) | 41.0% (med 40.0%) | 7.14 (med 7.0) | 8.77 (med 7.0) | $54,949.97 (med $48,154.96) |
 | **Actual Responder** | 56.0% (med 57.0%) | 2.67 (med 2.4) | 53.0% (med 100.0%) | 49.0% (med 50.0%) | 7.39 (med 7.0) | 10.68 (med 9.0) | $54,284.37 (med $46,254.18) |
-| Predicted Non-Responder | 28.0% (med 27.0%) | 1.63 (med 1.5) | 1.0% (med 0.0%) | 37.0% (med 36.0%) | 6.63 (med 6.0) | 8.48 (med 7.0) | $51,316.35 (med $45,023.34) |
-| **Predicted Responder** | 52.0% (med 52.0%) | 2.39 (med 2.2) | 37.0% (med 0.0%) | 49.0% (med 49.0%) | 7.76 (med 7.0) | 9.82 (med 9.0) | $58,283.62 (med $50,371.82) |
+| Predicted Non-Responder | 28.0% (med 26.0%) | 1.59 (med 1.5) | 1.0% (med 0.0%) | 36.0% (med 35.0%) | 6.61 (med 6.0) | 8.45 (med 7.0) | $51,525.42 (med $44,787.09) |
+| **Predicted Responder** | 52.0% (med 51.0%) | 2.38 (med 2.2) | 34.0% (med 0.0%) | 49.0% (med 49.0%) | 7.70 (med 7.0) | 9.77 (med 8.0) | $57,698.32 (med $49,757.54) |
 
 ---
 
@@ -221,12 +221,12 @@ The table below displays average and median feature values across both **ground 
 
 ### Question 1: Can campaign responses be predicted?
 **Answer:** **Yes, with high statistical confidence.**  
-The deployed model achieves a held-out test ROC-AUC of **0.8759** (95% CI: [0.8475, 0.9032]) and PR-AUC of **0.7286** (95% CI: [0.6723, 0.7858]). In gains analysis, the top 20% of scored customers capture **49.8%+ of all campaign responders**, demonstrating strong ranking power over random outreach.
+The deployed model achieves a held-out test ROC-AUC of **0.8759** (95% CI: [0.8473, 0.9029]) and PR-AUC of **0.7286** (95% CI: [0.6707, 0.7832]). In gains analysis, the top 20% of scored customers capture **49.8%+ of all campaign responders**, demonstrating strong ranking power over random outreach.
 
 ### Question 2: Which customer characteristics influence response?
 **Answer:** **Past campaign response history and digital email engagement overwhelmingly dominate static demographics.**  
-1. `previous_campaign_response` (Odds Ratio = 5.5174): Prior responders convert at 5.5x higher odds.
-2. `email_engagement` (Odds Ratio = 3.3052): Responders exhibit 56.0% average engagement vs 37.0% for non-responders.
+1. `previous_campaign_response` (Odds Ratio = 5.4601): Prior responders convert at 5.5x higher odds.
+2. `email_engagement` (Odds Ratio = 3.4854): Responders exhibit 56.0% average engagement vs 37.0% for non-responders.
 3. `discount_usage` and `purchase_frequency` (Odds Ratios ~2.0 - 2.1): Price sensitivity and velocity double response likelihood.
 Static demographic features (`income` and `age_group`) exhibit minimal explanatory power compared to dynamic behavioral signals.
 
@@ -254,7 +254,7 @@ At the Profit-Optimal threshold ($t = 0.07$), the model captures **183 out of 20
 ## 12. Honest Limitations & Risk Disclosures
 1. **Synthetic Data Generation:** Dataset was generated with seed 42 to model realistic consumer patterns. Real-world retail environments introduce unobserved confounders (seasonality, ad fatigue, competitor promotions).
 2. **Propensity vs Causal Uplift:** The model estimates *response propensity* ($P(Y=1|X, T=1)$), not *causal uplift* ($	au = P(Y=1|X, T=1) - P(Y=1|X, T=0)$). Some predicted responders are "Sure Things" who would have purchased without receiving promotional marketing. Randomized A/B control testing is required to isolate true incremental uplift.
-3. **Sample Size & Test Set Variance:** The held-out test set comprises 1,000 customers (201 positive events). The 95% bootstrap confidence intervals for test ROC-AUC ([0.8475, 0.9032]) and PR-AUC ([0.6723, 0.7858]) reflect this variance.
+3. **Sample Size & Test Set Variance:** The held-out test set comprises 1,000 customers (201 positive events). The 95% bootstrap confidence intervals for test ROC-AUC ([0.8473, 0.9029]) and PR-AUC ([0.6707, 0.7832]) reflect this variance.
 
 ---
 
@@ -269,8 +269,8 @@ The model is deployed via an interactive Streamlit application (`app.py`):
 ---
 
 ## 14. Conclusion
-This verification pass successfully addressed all critical pipeline defects:
-1. `previous_campaign_response` is protected from outlier clipping, restoring its predictive power (odds ratio 5.5174).
+This project implements a rigorous, end-to-end machine learning workflow:
+1. `previous_campaign_response` is protected from outlier clipping, restoring its predictive power (odds ratio 5.4601).
 2. The Streamlit web app was verified with headless testing (`AppTest`), rendering all 4 tabs with zero exceptions.
 3. Out-Of-Fold threshold selection resolved test set data leakage.
 4. Business simulation proves that the profit-optimal threshold ($t = 0.07$) delivers **$6,480.00 in net profit** (242.7% ROI), beating mass outreach by **+$1,430.00**.

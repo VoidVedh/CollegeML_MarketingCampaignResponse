@@ -1,9 +1,11 @@
 # Marketing Campaign Response Prediction Using Machine Learning
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.9.0-orange.svg)](https://scikit-learn.org/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.64.0-red.svg)](https://streamlit.io/)
 [![Status](https://img.shields.io/badge/verification-passed-brightgreen.svg)]()
+
+> **System Requirement:** Python >= 3.11 (verified on Python 3.11 and 3.12). All dependencies in `requirements.txt` are exact pinned versions.
 
 A complete, production-grade, verified machine learning system that predicts customer propensity to respond to promotional marketing campaigns. The project empowers marketing leaders to allocate advertising spend with statistical precision, suppress non-responsive contacts, slash wasted expenditure by **46.6% to 76.6%**, and deliver **$6,480.00 in net campaign profit** (242.7% ROI).
 
@@ -13,7 +15,7 @@ A complete, production-grade, verified machine learning system that predicts cus
 
 | Metric / Objective | Traditional Mass Outreach | Default ML (Threshold 0.50) | F1-Optimal (Threshold 0.30) | Profit-Optimal (Threshold 0.07) [Deployed] |
 | :--- | :---: | :---: | :---: | :---: |
-| **Deployed Model** | None (Spray & Pray) | **Logistic Regression (Calibrated)** | **Logistic Regression (Calibrated)** | **Logistic Regression (Calibrated)** |
+| **Deployed Model** | None (Spray & Pray) | **Logistic Regression** | **Logistic Regression** | **Logistic Regression** |
 | **Contacts Targeted (per 1,000 customers)** | 1000 | 127 | 234 | **534** |
 | **Total Campaign Spend ($)** | $5,000.00 | $635.00 | $1,170.00 | **$2,670.00** |
 | **Responders Reached** | 201 (100%) | 100 (49.8%) | 143 (71.1%) | **183 (91.0%)** |
@@ -33,10 +35,10 @@ Statistical Tie Disclosed: The top two models, Logistic Regression (CV PR-AUC: 0
 - **Winning Model:** Logistic Regression
 - **5-Fold CV PR-AUC:** 0.7223 ± 0.0267
 - **5-Fold CV ROC-AUC:** 0.8883 ± 0.0104
-- **Test Set ROC-AUC:** 0.8759 (95% Bootstrap CI: [0.8475, 0.9032])
-- **Test Set PR-AUC:** 0.7286 (95% Bootstrap CI: [0.6723, 0.7858])
+- **Test Set ROC-AUC:** 0.8759 (95% Bootstrap CI: [0.8473, 0.9029])
+- **Test Set PR-AUC:** 0.7286 (95% Bootstrap CI: [0.6707, 0.7832])
 - **Test FPR @ Recall=70%:** 0.1026 (lowest among all 6 models)
-- **Top Response Predictor:** Previous campaign response yields an Odds Ratio of **5.5174** (prior responders have >5.5x higher odds of converting).
+- **Top Response Predictor:** Previous campaign response yields an Odds Ratio of **5.4601** (prior responders have >5.5x higher odds of converting).
 
 ### Complete 6-Algorithm Comparative Benchmark
 | Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC | FPR | Confusion Matrix (TN / FP / FN / TP) | OOF Tuned Thresh | Tuned F1 | FPR @ Rec=70% | CV PR-AUC (Mean ± Std) | CV ROC-AUC (Mean ± Std) |
@@ -101,7 +103,7 @@ marketing-campaign-response/
 
 ## ⚙️ Quickstart & Execution
 
-### 1. Environment Setup
+### 1. Environment Setup (Python >= 3.11)
 ```bash
 python3 -m venv venv
 source venv/bin/activate
@@ -113,13 +115,29 @@ pip install -r requirements.txt
 python src/train.py
 ```
 
-### 3. Launch Streamlit Web Application
+### 3. Launch Streamlit Web Application (Demo Mode)
 ```bash
 streamlit run app.py
 ```
 
 ### 4. Run Automated Verification Tests
 ```bash
-pytest tests/
+pytest tests/ -v
+python tests/final_verification.py
 python tests/verify_consistency.py
 ```
+
+---
+
+## 🎬 Presentation Runbook & Live Demo Guide
+
+The Streamlit web application runs in zero-training Demo Mode entirely from pre-committed artifacts in `models/`.
+
+| Step | Command | Expected Runtime | Description | Mid-Demo Recovery / Troubleshooting |
+| :--- | :--- | :---: | :--- | :--- |
+| **1. Fresh Environment Setup** | `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt` | ~30s | Installs exact pinned dependencies in clean Python >= 3.11 environment. | Verify Python version (`python --version >= 3.11`). Check pip connectivity. |
+| **2. Launch Live Demo** | `streamlit run app.py` | < 3s cold start | Launches interactive dashboard on `http://localhost:8501`. | If model artifacts are missing, the app displays a clear `st.error` alert with step-by-step recovery commands. |
+| **3. End-to-End Retraining** | `python src/train.py` | ~45s | Executes complete data validation, EDA, 5-fold CV tuning, threshold optimization, calibration, explainability, and report updates. | Fully deterministic (`random_state=42`); running twice produces identical values in `metrics.json` at 4-decimal precision. |
+| **4. AppTest Verification** | `pytest tests/ -v` | ~10s | Runs headless Streamlit AppTest suite verifying all 4 tabs, single prediction, threshold reset, and batch CSV upload with 0 exceptions. | Verifies UI state persistence and batch data quality audit without needing a browser window. |
+| **5. 10-Point Audit** | `python tests/final_verification.py` | ~12s | Executes complete 10-point audit checklist (zero variance, odds ratios, calibration, OOF thresholds, profit simulation, tie disclosure, consistency). | Exits 0 upon 10/10 PASS. |
+| **6. Consistency Audit** | `python tests/verify_consistency.py` | ~1s | Verifies quantitative agreement across README.md, reports/final_report.md, and notebooks/analysis.ipynb with models/metrics.json. | Confirms zero manual typing discrepancies across documentation. |

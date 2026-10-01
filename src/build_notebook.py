@@ -46,7 +46,7 @@ def create_analysis_notebook(output_path="notebooks/analysis.ipynb"):
     cells.append(nbf.v4.new_markdown_cell(f"""# Marketing Campaign Response Prediction Using Machine Learning
 **Author:** Senior Machine Learning Engineer & Data Scientist  
 **Course / Project:** Advanced Predictive Analytics & Machine Learning  
-**Environment:** Python 3.10+, Scikit-Learn 1.9+, Imbalanced-Learn, Pandas, Streamlit  
+**Environment:** Python 3.11+, Scikit-Learn 1.9+, Imbalanced-Learn, Pandas, Streamlit  
 **Verified Deployed Model:** {deployed_name}  
 
 ---

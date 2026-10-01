@@ -1,6 +1,6 @@
 {
   "best_model_name": "Logistic Regression",
-  "deployed_model_name": "Logistic Regression (Calibrated)",
+  "deployed_model_name": "Logistic Regression",
   "selection_justification": "Statistical Tie Disclosed: The top two models, Logistic Regression (CV PR-AUC: 0.7223 \u00b1 0.0267) and Gradient Boosting (CV PR-AUC: 0.7169 \u00b1 0.0254), are within 1 standard deviation (0.0054 < 0.0267). Therefore, they are statistically tied on ranking performance. Logistic Regression broke the tie with lower FPR at 70% recall (0.1026 vs 0.1214).",
   "best_model_params": {
     "classifier__C": 1.0,
@@ -11,61 +11,61 @@
   "default_threshold": 0.5,
   "test_metrics_default_threshold": {
     "threshold": 0.5,
-    "accuracy": 0.871,
-    "precision": 0.8103448275862069,
-    "recall": 0.46766169154228854,
-    "f1": 0.5930599369085173,
-    "roc_auc": 0.8763255063854695,
-    "pr_auc": 0.729079255293848,
-    "tn": 777,
-    "fp": 22,
-    "fn": 107,
-    "tp": 94,
-    "fpr": 0.02753441802252816
+    "accuracy": 0.872,
+    "precision": 0.7874015748031497,
+    "recall": 0.4975124378109453,
+    "f1": 0.6097560975609756,
+    "roc_auc": 0.8758709581006109,
+    "pr_auc": 0.7286106355431867,
+    "tn": 772,
+    "fp": 27,
+    "fn": 101,
+    "tp": 100,
+    "fpr": 0.03379224030037547
   },
   "test_metrics_f1_threshold": {
     "threshold": 0.3,
-    "accuracy": 0.861,
-    "precision": 0.6396396396396397,
-    "recall": 0.7064676616915423,
-    "f1": 0.6713947990543735,
-    "roc_auc": 0.8763255063854695,
-    "pr_auc": 0.729079255293848,
-    "tn": 719,
-    "fp": 80,
-    "fn": 59,
-    "tp": 142,
-    "fpr": 0.10012515644555695
+    "accuracy": 0.851,
+    "precision": 0.6111111111111112,
+    "recall": 0.7114427860696517,
+    "f1": 0.6574712643678161,
+    "roc_auc": 0.8758709581006109,
+    "pr_auc": 0.7286106355431867,
+    "tn": 708,
+    "fp": 91,
+    "fn": 58,
+    "tp": 143,
+    "fpr": 0.11389236545682102
   },
   "test_metrics_profit_threshold": {
     "threshold": 0.07,
-    "accuracy": 0.656,
-    "precision": 0.35728542914171657,
-    "recall": 0.8905472636815921,
-    "f1": 0.50997150997151,
-    "roc_auc": 0.8763255063854695,
-    "pr_auc": 0.729079255293848,
-    "tn": 477,
-    "fp": 322,
-    "fn": 22,
-    "tp": 179,
-    "fpr": 0.4030037546933667
+    "accuracy": 0.631,
+    "precision": 0.34269662921348315,
+    "recall": 0.9104477611940298,
+    "f1": 0.49795918367346936,
+    "roc_auc": 0.8758709581006109,
+    "pr_auc": 0.7286106355431867,
+    "tn": 448,
+    "fp": 351,
+    "fn": 18,
+    "tp": 183,
+    "fpr": 0.43929912390488113
   },
   "bootstrap_confidence_intervals_profit_threshold": {
     "roc_auc": {
-      "ci_lower": 0.8475209232209169,
-      "ci_upper": 0.9032441621156679,
-      "std": 0.014300571699344749
+      "ci_lower": 0.8472918991828098,
+      "ci_upper": 0.9028876421092897,
+      "std": 0.014600352907439966
     },
     "pr_auc": {
-      "ci_lower": 0.6723045446324356,
-      "ci_upper": 0.7857998232728942,
-      "std": 0.028437780424016585
+      "ci_lower": 0.6707279612566293,
+      "ci_upper": 0.783217959907671,
+      "std": 0.030495180558070767
     },
     "f1": {
-      "ci_lower": 0.46554298463325766,
-      "ci_upper": 0.5501435817110465,
-      "std": 0.02181027842544836
+      "ci_lower": 0.453480877851756,
+      "ci_upper": 0.5426103910813391,
+      "std": 0.023675432458065544
     }
   },
   "cv_metrics": {
@@ -152,10 +152,10 @@
   },
   "brier_scores": {
     "validation_uncalibrated": 0.09016363862859993,
-    "validation_calibrated": 0.08985592875464238,
+    "validation_calibrated": 0.09047406705411942,
     "test_uncalibrated": 0.09604368439760205,
     "test_calibrated": 0.09599455687797966,
-    "validation_improved": true
+    "validation_improved": false
   },
   "economic_parameters": {
     "cost_per_contact": 5.0,
@@ -213,16 +213,16 @@
     }
   ],
   "logistic_regression_odds_ratios": {
-    "income": 1.240113477172521,
-    "previous_purchases": 1.2196788648802592,
-    "purchase_frequency": 2.0026204003542913,
-    "website_visits": 1.2115165495007898,
-    "email_engagement": 3.3052237188012437,
-    "discount_usage": 2.101671585651824,
-    "previous_campaign_response": 5.517406212232942,
-    "age_group_26-35": 1.1846526384207792,
-    "age_group_36-45": 1.1906907537480413,
-    "age_group_46-55": 0.9085704272463826,
-    "age_group_56+": 1.0403293061200092
+    "income": 1.2191236292769219,
+    "previous_purchases": 1.2313084078088328,
+    "purchase_frequency": 2.0399963666507044,
+    "website_visits": 1.2189179052294783,
+    "email_engagement": 3.4854379578355306,
+    "discount_usage": 2.158305676003817,
+    "previous_campaign_response": 5.460075798888488,
+    "age_group_26-35": 1.023486354598746,
+    "age_group_36-45": 1.0934089550550459,
+    "age_group_46-55": 0.8945772168918841,
+    "age_group_56+": 0.9761705519615653
   }
 }

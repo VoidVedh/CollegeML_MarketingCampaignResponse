@@ -18,6 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, Any, List, Tuple
+from sklearn.base import clone
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, average_precision_score, confusion_matrix,
@@ -26,7 +27,7 @@ from sklearn.metrics import (
 from sklearn.inspection import permutation_importance
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.frozen import FrozenEstimator
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_predict
 
 # Publication-grade plotting styles
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
@@ -95,8 +96,9 @@ def compute_fpr_at_recall(y_true, y_proba, target_recall: float = 0.70) -> float
 def compute_bootstrap_ci(y_true, y_proba, threshold: float, n_bootstraps: int = 1000, random_state: int = 42) -> Dict[str, Dict[str, float]]:
     """
     Computes 95% bootstrap confidence intervals for ROC-AUC, PR-AUC, and F1 on the test set.
+    Uses dedicated Generator instance to avoid mutating global random state.
     """
-    np.random.seed(random_state)
+    rng = np.random.default_rng(random_state)
     n_samples = len(y_true)
     y_true_arr = np.asarray(y_true)
     y_proba_arr = np.asarray(y_proba)
@@ -106,7 +108,7 @@ def compute_bootstrap_ci(y_true, y_proba, threshold: float, n_bootstraps: int = 
     f1s = []
     
     for _ in range(n_bootstraps):
-        idx = np.random.choice(n_samples, size=n_samples, replace=True)
+        idx = rng.choice(n_samples, size=n_samples, replace=True)
         sample_true = y_true_arr[idx]
         sample_proba = y_proba_arr[idx]
         
@@ -337,38 +339,49 @@ def evaluate_probability_calibration(
     y_train: pd.Series,
     X_test: pd.DataFrame,
     y_test: pd.Series,
+    random_state: int = 42,
     output_dir: str = "reports/figures"
 ) -> Dict[str, Any]:
     """
     Calibrates model probability using FrozenEstimator (scikit-learn 1.9+ compliant).
-    Trains base model on 75% sub-train, calibrates on 25% validation, and evaluates on test set.
-    Deploys calibrated model only if validation Brier score improves.
+    Trains cloned base model on 75% sub-train, calibrates via 5-fold CV over validation data
+    for fair out-of-fold Brier comparison, and evaluates on test set.
+    Never mutates base_model_pipeline.
     """
     os.makedirs(output_dir, exist_ok=True)
     X_subtrain, X_val, y_subtrain, y_val = train_test_split(
-        X_train, y_train, test_size=0.25, random_state=42, stratify=y_train
+        X_train, y_train, test_size=0.25, random_state=random_state, stratify=y_train
     )
     
-    # Fit base pipeline on sub-train
-    base_model_pipeline.fit(X_subtrain, y_subtrain)
-    val_uncal_p = base_model_pipeline.predict_proba(X_val)[:, 1]
-    test_uncal_p = base_model_pipeline.predict_proba(X_test)[:, 1]
+    # Fit base pipeline clone on sub-train to prevent mutating input model
+    base_clone = clone(base_model_pipeline)
+    base_clone.fit(X_subtrain, y_subtrain)
+    val_uncal_p = base_clone.predict_proba(X_val)[:, 1]
     
+    # Compute uncalibrated validation Brier (out-of-sample on X_val)
     brier_val_uncal = float(brier_score_loss(y_val, val_uncal_p))
-    brier_test_uncal = float(brier_score_loss(y_test, test_uncal_p))
     
-    # Fit calibration via FrozenEstimator on validation data
-    frozen_estimator = FrozenEstimator(base_model_pipeline)
-    calibrator = CalibratedClassifierCV(estimator=frozen_estimator, method='sigmoid')
-    calibrator.fit(X_val, y_val)
+    # Fair Out-Of-Fold calibrated probabilities on X_val to avoid in-sample calibration leakage
+    frozen_subtrain = FrozenEstimator(base_clone)
+    cv_val = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+    val_cal_p = cross_val_predict(
+        CalibratedClassifierCV(estimator=frozen_subtrain, method='sigmoid'),
+        X_val, y_val, cv=cv_val, method='predict_proba'
+    )[:, 1]
     
-    val_cal_p = calibrator.predict_proba(X_val)[:, 1]
-    test_cal_p = calibrator.predict_proba(X_test)[:, 1]
-    
+    # Compute calibrated validation Brier (apples-to-apples out-of-fold)
     brier_val_cal = float(brier_score_loss(y_val, val_cal_p))
-    brier_test_cal = float(brier_score_loss(y_test, test_cal_p))
+    val_improved = bool(brier_val_cal < brier_val_uncal)
     
-    val_improved = brier_val_cal < brier_val_uncal
+    # Fit calibrator on all validation data using frozen subtrain model for test evaluation and plot
+    calibrator_val = CalibratedClassifierCV(estimator=frozen_subtrain, method='sigmoid')
+    calibrator_val.fit(X_val, y_val)
+    
+    test_uncal_p = base_clone.predict_proba(X_test)[:, 1]
+    test_cal_p = calibrator_val.predict_proba(X_test)[:, 1]
+    
+    brier_test_uncal = float(brier_score_loss(y_test, test_uncal_p))
+    brier_test_cal = float(brier_score_loss(y_test, test_cal_p))
     
     # Reliability diagram
     prob_true_uncal, prob_pred_uncal = calibration_curve(y_test, test_uncal_p, n_bins=10)
@@ -399,7 +412,6 @@ def evaluate_probability_calibration(
         'brier_test_uncalibrated': brier_test_uncal,
         'brier_test_calibrated': brier_test_cal,
         'val_improved': val_improved,
-        'calibrator': calibrator if val_improved else None,
         'plot_path': plot_path
     }
 
@@ -714,7 +726,7 @@ def analyze_feature_importances(
             sv = shap_values
             
         plt.figure(figsize=(10, 6))
-        shap.summary_plot(sv, X_test_trans, feature_names=feature_names, show=False)
+        shap.summary_plot(sv, X_test_trans, feature_names=feature_names, show=False, rng=np.random.default_rng(42))
         plt.title("SHAP Feature Attribution & Impact Distribution", fontweight='bold', pad=15)
         plt.tight_layout()
         shap_path = os.path.join(output_dir, "shap_summary.png")

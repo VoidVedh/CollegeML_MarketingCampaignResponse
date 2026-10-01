@@ -13,6 +13,7 @@ is sourced directly from serialized evaluation artifacts.
 
 import os
 import json
+from typing import Dict, Any, List, Optional
 import pandas as pd
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -349,7 +350,11 @@ The F1-score treats precision and recall with equal harmonic weight ($\beta = 1$
 Probability calibration maps raw model outputs to true empirical conversion probabilities. Using scikit-learn's modern `FrozenEstimator` wrapped within `CalibratedClassifierCV(method='sigmoid')`, we calibrated on a 25% holdout validation partition:
 - **Validation Brier Score:** Uncalibrated = **{brier['validation_uncalibrated']:.5f}** vs Calibrated = **{brier['validation_calibrated']:.5f}**
 - **Test Set Brier Score:** Uncalibrated = **{brier['test_uncalibrated']:.5f}** vs Calibrated = **{brier['test_calibrated']:.5f}**
-- **Deployment Decision:** Validation Brier score improved ({brier['validation_uncalibrated']:.5f} $\\to$ {brier['validation_calibrated']:.5f}), confirming calibration efficacy. The calibrated model pipeline is saved as `models/best_model.joblib`.
+- **Deployment Decision:** {
+    f"Validation Brier score improved ({brier['validation_uncalibrated']:.5f} $\\\\to$ {brier['validation_calibrated']:.5f}), confirming calibration efficacy. The calibrated model pipeline is saved as `models/best_model.joblib`."
+    if brier.get('validation_improved', False) else
+    f"Fair out-of-fold validation demonstrates that Logistic Regression (already trained with cross-entropy log-loss) is naturally well-calibrated (Validation Brier: {brier['validation_uncalibrated']:.5f} uncalibrated vs {brier['validation_calibrated']:.5f} post-hoc sigmoid). Because calibration did not improve out-of-fold Brier loss, the uncalibrated base pipeline trained on 100% of the training data is deployed as `models/best_model.joblib` per the strict deployment policy."
+}
 
 ---
 
@@ -425,7 +430,7 @@ The model is deployed via an interactive Streamlit application (`app.py`):
 ---
 
 ## 14. Conclusion
-This verification pass successfully addressed all critical pipeline defects:
+This project implements a rigorous, end-to-end machine learning workflow:
 1. `previous_campaign_response` is protected from outlier clipping, restoring its predictive power (odds ratio {odds_ratios.get('previous_campaign_response', 5.5174):.4f}).
 2. The Streamlit web app was verified with headless testing (`AppTest`), rendering all 4 tabs with zero exceptions.
 3. Out-Of-Fold threshold selection resolved test set data leakage.
@@ -469,10 +474,12 @@ def generate_readme(project_root: str = None) -> str:
 
     readme_content = f"""# Marketing Campaign Response Prediction Using Machine Learning
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.9.0-orange.svg)](https://scikit-learn.org/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.64.0-red.svg)](https://streamlit.io/)
 [![Status](https://img.shields.io/badge/verification-passed-brightgreen.svg)]()
+
+> **System Requirement:** Python >= 3.11 (verified on Python 3.11 and 3.12). All dependencies in `requirements.txt` are exact pinned versions.
 
 A complete, production-grade, verified machine learning system that predicts customer propensity to respond to promotional marketing campaigns. The project empowers marketing leaders to allocate advertising spend with statistical precision, suppress non-responsive contacts, slash wasted expenditure by **{strat_prof['Cost Saved vs All (%)']:.1f}% to {strat_f1['Cost Saved vs All (%)']:.1f}%**, and deliver **${strat_prof['Net Profit ($)']:,.2f} in net campaign profit** ({strat_prof['ROI (%)']:.1f}% ROI).
 
@@ -559,7 +566,7 @@ marketing-campaign-response/
 
 ## ⚙️ Quickstart & Execution
 
-### 1. Environment Setup
+### 1. Environment Setup (Python >= 3.11)
 ```bash
 python3 -m venv venv
 source venv/bin/activate
@@ -571,16 +578,32 @@ pip install -r requirements.txt
 python src/train.py
 ```
 
-### 3. Launch Streamlit Web Application
+### 3. Launch Streamlit Web Application (Demo Mode)
 ```bash
 streamlit run app.py
 ```
 
 ### 4. Run Automated Verification Tests
 ```bash
-pytest tests/
+pytest tests/ -v
+python tests/final_verification.py
 python tests/verify_consistency.py
 ```
+
+---
+
+## 🎬 Presentation Runbook & Live Demo Guide
+
+The Streamlit web application runs in zero-training Demo Mode entirely from pre-committed artifacts in `models/`.
+
+| Step | Command | Expected Runtime | Description | Mid-Demo Recovery / Troubleshooting |
+| :--- | :--- | :---: | :--- | :--- |
+| **1. Fresh Environment Setup** | `python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt` | ~30s | Installs exact pinned dependencies in clean Python >= 3.11 environment. | Verify Python version (`python --version >= 3.11`). Check pip connectivity. |
+| **2. Launch Live Demo** | `streamlit run app.py` | < 3s cold start | Launches interactive dashboard on `http://localhost:8501`. | If model artifacts are missing, the app displays a clear `st.error` alert with step-by-step recovery commands. |
+| **3. End-to-End Retraining** | `python src/train.py` | ~45s | Executes complete data validation, EDA, 5-fold CV tuning, threshold optimization, calibration, explainability, and report updates. | Fully deterministic (`random_state=42`); running twice produces identical values in `metrics.json` at 4-decimal precision. |
+| **4. AppTest Verification** | `pytest tests/ -v` | ~10s | Runs headless Streamlit AppTest suite verifying all 4 tabs, single prediction, threshold reset, and batch CSV upload with 0 exceptions. | Verifies UI state persistence and batch data quality audit without needing a browser window. |
+| **5. 10-Point Audit** | `python tests/final_verification.py` | ~12s | Executes complete 10-point audit checklist (zero variance, odds ratios, calibration, OOF thresholds, profit simulation, tie disclosure, consistency). | Exits 0 upon 10/10 PASS. |
+| **6. Consistency Audit** | `python tests/verify_consistency.py` | ~1s | Verifies quantitative agreement across README.md, reports/final_report.md, and notebooks/analysis.ipynb with models/metrics.json. | Confirms zero manual typing discrepancies across documentation. |
 """
 
     readme_path = os.path.join(project_root, "README.md")

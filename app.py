@@ -111,8 +111,18 @@ def load_model_artifacts():
     metrics_path = os.path.join(PROJECT_ROOT, "models", "metrics.json")
     feature_path = os.path.join(PROJECT_ROOT, "models", "feature_list.json")
     
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found at {model_path}. Please execute 'python src/train.py' first.")
+    required_files = [
+        ("Model pipeline ('models/best_model.joblib')", model_path),
+        ("Evaluation metrics ('models/metrics.json')", metrics_path),
+        ("Feature schema ('models/feature_list.json')", feature_path)
+    ]
+    missing = [desc for desc, path in required_files if not os.path.exists(path)]
+    if missing:
+        raise FileNotFoundError(
+            f"Missing required model artifact(s): {', '.join(missing)}. "
+            "The app runs in zero-training Demo Mode from pre-committed artifacts. "
+            "Please ensure artifacts are present or run 'python src/train.py' to generate them."
+        )
         
     model = joblib.load(model_path)
     
@@ -147,7 +157,8 @@ try:
     cost_per_contact = float(metrics_meta.get('economic_parameters', {}).get('cost_per_contact', 5.0))
     profit_per_responder = float(metrics_meta.get('economic_parameters', {}).get('profit_per_responder', 50.0))
 except Exception as e:
-    st.error(f"Error loading model artifacts: {e}")
+    st.error(f"⚠️ **Application Initialization Error:** {e}")
+    st.info("💡 **Presentation Runbook / Recovery:** Run `python src/train.py` from the project root to generate and serialize all model artifacts.")
     st.stop()
 
 
