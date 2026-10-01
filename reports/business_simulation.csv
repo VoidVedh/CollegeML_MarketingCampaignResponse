@@ -1,0 +1,4 @@
+Strategy,Targeted Contacts,Total Cost ($),Responders Reached,Wasted Contacts (FP),Gross Revenue ($),Net Profit ($),ROI (%),Cost Saved vs All (%)
+Strategy A: Contact All Customers,1000,5000.0,201,799,10050.0,5050.0,101.0,0.0
+Strategy B: Default ML (Threshold 0.50),214,1070.0,117,97,5850.0,4780.0,446.72897196261687,78.60000000000001
+Strategy C: Optimized ML (Threshold 0.39),279,1395.0,138,141,6900.0,5505.0,394.6236559139785,72.1
