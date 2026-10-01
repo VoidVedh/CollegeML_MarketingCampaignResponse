@@ -1,0 +1,5 @@
+,income,income,previous_purchases,previous_purchases,purchase_frequency,purchase_frequency,previous_campaign_response,previous_campaign_response,website_visits,website_visits,email_engagement,email_engagement,discount_usage,discount_usage
+,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median
+predicted_class,,,,,,,,,,,,,,
+Non-Responder,53361.72,46695.98,7.01,7.0,1.81,1.62,0.14,0.0,8.9,7.0,0.35,0.34,0.4,0.39
+Responder,60048.88,53224.84,7.87,7.0,2.76,2.58,0.36,0.0,10.1,9.0,0.61,0.62,0.53,0.53
