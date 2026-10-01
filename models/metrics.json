@@ -1,0 +1,144 @@
+{
+  "best_model_name": "Gradient Boosting",
+  "best_model_params": {
+    "classifier__learning_rate": 0.2,
+    "classifier__max_depth": 3,
+    "classifier__n_estimators": 100
+  },
+  "optimal_threshold": 0.38999999999999996,
+  "test_metrics_default_threshold": {
+    "accuracy": 0.819,
+    "precision": 0.5467289719626168,
+    "recall": 0.582089552238806,
+    "f1": 0.563855421686747,
+    "roc_auc": 0.8248930566192816,
+    "tn": 702,
+    "fp": 97,
+    "fn": 84,
+    "tp": 117,
+    "fpr": 0.1214017521902378
+  },
+  "test_metrics_optimal_threshold": {
+    "accuracy": 0.796,
+    "precision": 0.4946236559139785,
+    "recall": 0.6865671641791045,
+    "f1": 0.575,
+    "roc_auc": 0.8248930566192816,
+    "tn": 658,
+    "fp": 141,
+    "fn": 63,
+    "tp": 138,
+    "fpr": 0.17647058823529413
+  },
+  "cv_metrics": {
+    "Logistic Regression": {
+      "best_params": {
+        "classifier__C": 1.0,
+        "classifier__solver": "lbfgs"
+      },
+      "cv_f1_mean": 0.5848532969522465,
+      "cv_f1_std": 0.007495387041613918,
+      "cv_auc_mean": 0.8620095977389161,
+      "cv_auc_std": 0.0029113643031383,
+      "train_time_sec": 2.215174913406372
+    },
+    "K-Nearest Neighbors": {
+      "best_params": {
+        "classifier__n_neighbors": 15,
+        "classifier__weights": "distance"
+      },
+      "cv_f1_mean": 0.5502734200177194,
+      "cv_f1_std": 0.017269720847974266,
+      "cv_auc_mean": 0.8149626135891805,
+      "cv_auc_std": 0.011707610850700394,
+      "train_time_sec": 0.4402179718017578
+    },
+    "Decision Tree": {
+      "best_params": {
+        "classifier__criterion": "entropy",
+        "classifier__max_depth": 5,
+        "classifier__min_samples_split": 2
+      },
+      "cv_f1_mean": 0.5665626756359551,
+      "cv_f1_std": 0.01534001776761487,
+      "cv_auc_mean": 0.8282124494053742,
+      "cv_auc_std": 0.003140752150456294,
+      "train_time_sec": 0.952484130859375
+    },
+    "Random Forest": {
+      "best_params": {
+        "classifier__max_depth": 8,
+        "classifier__min_samples_split": 2,
+        "classifier__n_estimators": 150
+      },
+      "cv_f1_mean": 0.5986908817732818,
+      "cv_f1_std": 0.007657225361195012,
+      "cv_auc_mean": 0.851700476408545,
+      "cv_auc_std": 0.004352451552778808,
+      "train_time_sec": 8.500468969345093
+    },
+    "Naive Bayes": {
+      "best_params": {
+        "classifier__var_smoothing": 1e-09
+      },
+      "cv_f1_mean": 0.5795095390315683,
+      "cv_f1_std": 0.009333559243936926,
+      "cv_auc_mean": 0.8564123335360957,
+      "cv_auc_std": 0.004765328694644235,
+      "train_time_sec": 0.20426702499389648
+    },
+    "Gradient Boosting": {
+      "best_params": {
+        "classifier__learning_rate": 0.2,
+        "classifier__max_depth": 3,
+        "classifier__n_estimators": 100
+      },
+      "cv_f1_mean": 0.6023310319732358,
+      "cv_f1_std": 0.010356711552908774,
+      "cv_auc_mean": 0.8468089734509341,
+      "cv_auc_std": 0.006447846438217104,
+      "train_time_sec": 12.776878118515015
+    }
+  },
+  "brier_score_uncalibrated": 0.128166884962712,
+  "brier_score_calibrated": 0.128166884962712,
+  "economic_parameters": {
+    "cost_per_contact": 5.0,
+    "profit_per_responder": 50.0
+  },
+  "business_simulation": [
+    {
+      "Strategy": "Strategy A: Contact All Customers",
+      "Targeted Contacts": 1000,
+      "Total Cost ($)": 5000.0,
+      "Responders Reached": 201,
+      "Wasted Contacts (FP)": 799,
+      "Gross Revenue ($)": 10050.0,
+      "Net Profit ($)": 5050.0,
+      "ROI (%)": 101.0,
+      "Cost Saved vs All (%)": 0.0
+    },
+    {
+      "Strategy": "Strategy B: Default ML (Threshold 0.50)",
+      "Targeted Contacts": 214,
+      "Total Cost ($)": 1070.0,
+      "Responders Reached": 117,
+      "Wasted Contacts (FP)": 97,
+      "Gross Revenue ($)": 5850.0,
+      "Net Profit ($)": 4780.0,
+      "ROI (%)": 446.72897196261687,
+      "Cost Saved vs All (%)": 78.60000000000001
+    },
+    {
+      "Strategy": "Strategy C: Optimized ML (Threshold 0.39)",
+      "Targeted Contacts": 279,
+      "Total Cost ($)": 1395.0,
+      "Responders Reached": 138,
+      "Wasted Contacts (FP)": 141,
+      "Gross Revenue ($)": 6900.0,
+      "Net Profit ($)": 5505.0,
+      "ROI (%)": 394.6236559139785,
+      "Cost Saved vs All (%)": 72.1
+    }
+  ]
+}
