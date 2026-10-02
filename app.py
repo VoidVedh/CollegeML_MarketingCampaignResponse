@@ -147,6 +147,55 @@ def predict_single_customer(model, customer_data: dict, threshold: float):
     return prediction, proba
 
 
+def compute_model_feature_contributions(model, customer_data: dict) -> List[Dict[str, Any]]:
+    """
+    Computes model-based linear feature contributions (transformed_feature * weight)
+    for transparent, truthful model interpretability.
+    """
+    try:
+        pipeline = model
+        if hasattr(model, 'estimator'):
+            base = model.estimator
+            if hasattr(base, 'estimator'):
+                pipeline = base.estimator
+            else:
+                pipeline = base
+                
+        if not hasattr(pipeline, 'named_steps'):
+            return []
+            
+        preprocessor = pipeline.named_steps.get('preprocessor')
+        classifier = pipeline.named_steps.get('classifier')
+        
+        if preprocessor is None or classifier is None:
+            return []
+            
+        if not hasattr(classifier, 'coef_'):
+            return []
+            
+        df_in = pd.DataFrame([customer_data])
+        X_trans = preprocessor.transform(df_in)
+        feat_names = list(preprocessor.get_feature_names_out())
+        coefs = classifier.coef_[0]
+        
+        contributions = X_trans[0] * coefs
+        
+        results = []
+        for name, val, coef, contrib in zip(feat_names, X_trans[0], coefs, contributions):
+            results.append({
+                'feature': name,
+                'transformed_val': float(val),
+                'coef': float(coef),
+                'contribution': float(contrib)
+            })
+            
+        # Sort descending by contribution
+        results.sort(key=lambda x: x['contribution'], reverse=True)
+        return results
+    except Exception:
+        return []
+
+
 # Load artifacts
 try:
     best_model, metrics_meta, feature_meta = load_model_artifacts()
@@ -205,7 +254,7 @@ with st.sidebar:
     st.button("🔄 Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold)
         
     st.markdown("---")
-    st.caption("College ML Submission Project • End-to-End Predictive Analytics")
+    st.caption("Author: Vedh • College ML Submission Project")
 
 
 # -------------------------------------------------------------
@@ -320,22 +369,28 @@ with tab_single:
         try:
             pred_class, proba = predict_single_customer(best_model, customer_data, selected_threshold)
             
-            # Key Drivers analysis
-            drivers = []
+            # Model-based feature contributions
+            model_contributions = compute_model_feature_contributions(best_model, customer_data)
+            
+            # General customer characteristics
+            characteristics = []
             if previous_campaign_response == 1:
-                drivers.append("Strong positive history (prior campaign conversion - 5.5x odds multiplier)")
+                characteristics.append("Customer previously responded to a promotional campaign.")
             if email_engagement >= 0.50:
-                drivers.append("High digital email responsiveness")
+                characteristics.append(f"High email interaction rate ({email_engagement*100:.0f}% open/click rate).")
             if purchase_frequency >= 2.5:
-                drivers.append("Frequent recurring purchaser (high brand engagement)")
+                characteristics.append(f"Active recurring buyer ({purchase_frequency:.1f} orders/month).")
             if discount_usage >= 0.45:
-                drivers.append("Promotional/deal-sensitive customer profile")
+                characteristics.append(f"Price-conscious buyer ({discount_usage*100:.0f}% coupon usage rate).")
+            if income >= 75000:
+                characteristics.append(f"Upper-middle income tier (${income:,.0f}/year).")
                 
             st.session_state.single_prediction = {
                 'pred_class': pred_class,
                 'proba': proba,
                 'threshold': selected_threshold,
-                'drivers': drivers
+                'contributions': model_contributions,
+                'characteristics': characteristics
             }
         except Exception as err:
             st.error(f"Prediction encountered an error: {err}")
@@ -343,8 +398,11 @@ with tab_single:
     # Render persisted prediction from session_state
     if st.session_state.single_prediction is not None:
         p_res = st.session_state.single_prediction
-        pred_class = int(p_res['proba'] >= selected_threshold)
         proba = p_res['proba']
+        pred_class = int(proba >= selected_threshold)
+        
+        break_even_p = cost_per_contact / profit_per_responder
+        exp_val = proba * profit_per_responder - cost_per_contact
         
         st.markdown("---")
         st.subheader("🎯 Prediction Result & Marketing Recommendation")
@@ -359,27 +417,69 @@ with tab_single:
                 st.markdown('<div class="badge-no-respond">❌ WILL NOT RESPOND</div>', unsafe_allow_html=True)
                 
             st.markdown(f"**Predicted Response Probability:** `{proba*100:.2f}%`")
-            st.caption(f"Evaluated against Operating Threshold: **{selected_threshold:.2f}**")
+            st.caption(f"Operating Threshold: **{selected_threshold:.2f}** | Theoretical Break-Even: **{break_even_p*100:.1f}%**")
             
             # Visual probability gauge
             st.progress(min(max(float(proba), 0.0), 1.0))
             
+            # Economic metrics breakdown
+            st.markdown(f"""
+            **Unit Economic Simulation:**
+            - Contact Cost: `${cost_per_contact:.2f}`
+            - Responder Value: `${profit_per_responder:.2f}`
+            - Individual Expected Net Value: **${exp_val:+.2f}**
+            """)
+            
         with res_col2:
             st.markdown("#### Actionable Commercial Strategy")
             if pred_class == 1:
-                recommendation = f"🌟 **Target Customer:** Allocate budget to contact this customer. Expected return exceeds marginal cost of ${cost_per_contact:.2f}. Provide personalized, high-relevance promotional offer."
+                if proba >= break_even_p:
+                    econ_statement = (
+                        f"Response probability ({proba*100:.1f}%) exceeds the theoretical individual break-even probability ({break_even_p*100:.1f}%). "
+                        f"Expected net value per contact attempt is positive (+${exp_val:.2f})."
+                    )
+                else:
+                    econ_statement = (
+                        f"Response probability ({proba*100:.1f}%) meets the simulated operating threshold ({selected_threshold:.2f}) "
+                        f"but falls below theoretical individual break-even ({break_even_p*100:.1f}%), resulting in a marginal individual expected value of ${exp_val:.2f}. "
+                        "Under assumed portfolio economics, targeting this volume captures incremental responders that maximize overall campaign net profit."
+                    )
+                recommendation = (
+                    f"🌟 **Target Customer:** Prediction probability ({proba*100:.1f}%) meets or exceeds the selected operating threshold ({selected_threshold:.2f}). "
+                    f"{econ_statement} Allocating marketing outreach with personalized incentives is recommended."
+                )
             else:
-                recommendation = f"🛑 **Suppression Recommended:** Suppress this customer from paid direct outreach (${cost_per_contact:.2f} saved per customer). Funnel into low-cost organic nurture streams instead."
+                recommendation = (
+                    f"🛑 **Suppression Recommended:** Prediction probability ({proba*100:.1f}%) falls below operating threshold ({selected_threshold:.2f}). "
+                    f"Expected value is negative (${exp_val:.2f}). Suppressing saves ${cost_per_contact:.2f} in direct outreach. "
+                    "Funnel into low-cost organic nurture streams instead."
+                )
                 
             st.markdown(f'<div class="recommendation-box">{recommendation}</div>', unsafe_allow_html=True)
             
-            drivers = p_res.get('drivers', [])
-            if drivers:
-                st.markdown("**Dominant Propensity Drivers:**")
-                for d in drivers:
-                    st.markdown(f"- {d}")
-            else:
-                st.markdown("**Dominant Propensity Drivers:** Baseline behavioral signals indicate lower engagement across promotional touchpoints.")
+            # Model-based feature contributions
+            contributions = p_res.get('contributions', [])
+            if contributions:
+                st.markdown("**Model-Based Feature Contributions (Fitted Pipeline $\\beta_j \\cdot x_j$):**")
+                pos_contribs = [c for c in contributions if c['contribution'] > 0]
+                neg_contribs = [c for c in contributions if c['contribution'] < 0]
+                
+                c_col1, c_col2 = st.columns(2)
+                with c_col1:
+                    st.caption("🟢 **Elevating Response Propensity:**")
+                    for c in pos_contribs[:3]:
+                        st.markdown(f"- `{c['feature']}`: **+{c['contribution']:.3f}** (weight: {c['coef']:+.2f})")
+                with c_col2:
+                    st.caption("🔴 **Lowering Response Propensity:**")
+                    for c in neg_contribs[-3:]:
+                        st.markdown(f"- `{c['feature']}`: **{c['contribution']:.3f}** (weight: {c['coef']:+.2f})")
+            
+            # General characteristics
+            characteristics = p_res.get('characteristics', [])
+            if characteristics:
+                st.markdown("**Customer Context:**")
+                for char in characteristics:
+                    st.markdown(f"- {char}")
 
 
 # -------------------------------------------------------------
@@ -537,7 +637,25 @@ with tab_batch:
     
     if uploaded_file is not None:
         try:
-            df_upload = pd.read_csv(uploaded_file)
+            if hasattr(uploaded_file, 'size') and uploaded_file.size == 0:
+                st.error("Uploaded CSV is empty.")
+                st.stop()
+
+            try:
+                df_upload = pd.read_csv(uploaded_file)
+            except pd.errors.EmptyDataError:
+                st.error("Uploaded CSV is empty.")
+                st.stop()
+
+            if df_upload.empty:
+                st.error("Uploaded CSV is empty.")
+                st.stop()
+
+            missing_cols = [col for col in FEATURE_COLUMNS if col not in df_upload.columns]
+            if missing_cols:
+                st.error(f"Uploaded CSV is missing required columns: {', '.join(missing_cols)}")
+                st.stop()
+
             st.write(f"Uploaded file contains **{len(df_upload)} records**.")
             
             # Validate schema without converting NaN in age_group to string

@@ -129,6 +129,44 @@ def test_batch_csv_upload():
     print("PASS: Batch CSV upload executed cleanly with audit checks and zero exceptions.")
 
 
+def test_empty_csv_upload():
+    """Verify batch scoring with empty CSV shows user-friendly error without crashing."""
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    assert len(at.exception) == 0
+
+    empty_df = pd.DataFrame()
+    csv_bytes = empty_df.to_csv(index=False).encode('utf-8')
+
+    uploader = at.file_uploader[0]
+    uploader.upload(filename="empty.csv", content=csv_bytes, mime_type="text/csv").run()
+
+    assert len(at.exception) == 0, f"Exception on empty CSV upload: {[e.value for e in at.exception]}"
+    error_texts = [e.value for e in at.error]
+    assert any("empty" in t.lower() for t in error_texts), f"Expected 'empty' error message, got: {error_texts}"
+    print("PASS: Empty CSV upload handled gracefully with error banner.")
+
+
+def test_missing_columns_csv_upload():
+    """Verify batch scoring with missing required columns displays informative error."""
+    at = AppTest.from_file(APP_PATH, default_timeout=30)
+    at.run()
+    assert len(at.exception) == 0
+
+    incomplete_df = pd.DataFrame([
+        {'age_group': '26-35', 'income': 58000.0}
+    ])
+    csv_bytes = incomplete_df.to_csv(index=False).encode('utf-8')
+
+    uploader = at.file_uploader[0]
+    uploader.upload(filename="missing_cols.csv", content=csv_bytes, mime_type="text/csv").run()
+
+    assert len(at.exception) == 0, f"Exception on missing columns upload: {[e.value for e in at.exception]}"
+    error_texts = [e.value for e in at.error]
+    assert any("missing required columns" in t.lower() for t in error_texts), f"Expected missing columns error, got: {error_texts}"
+    print("PASS: Incomplete CSV upload handled gracefully with missing columns error banner.")
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("RUNNING STREAMLIT AppTest VERIFICATION SUITE")
@@ -137,6 +175,8 @@ if __name__ == '__main__':
     test_single_prediction_flow()
     test_threshold_slider_and_reset()
     test_batch_csv_upload()
+    test_empty_csv_upload()
+    test_missing_columns_csv_upload()
     print("=" * 60)
     print("ALL APP TESTS PASSED WITH 0 EXCEPTIONS!")
     print("=" * 60)
