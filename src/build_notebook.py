@@ -44,7 +44,7 @@ def create_analysis_notebook(output_path="notebooks/analysis.ipynb"):
     
     # Title & Metadata
     cells.append(nbf.v4.new_markdown_cell(f"""# Marketing Campaign Response Prediction Using Machine Learning
-**Author:** Senior Machine Learning Engineer & Data Scientist  
+**Author:** Vedh  
 **Course / Project:** Advanced Predictive Analytics & Machine Learning  
 **Environment:** Python 3.11+, Scikit-Learn 1.9+, Imbalanced-Learn, Pandas, Streamlit  
 **Verified Deployed Model:** {deployed_name}  
@@ -150,8 +150,8 @@ display(col1, col2)
     cells.append(nbf.v4.new_markdown_cell(f"""## 5. Comprehensive 6-Model Benchmark & Defensible Selection
 All six models were evaluated under identical 5-fold Stratified Cross-Validation on the training partition:
 - **Primary Selection Metric:** 5-fold CV PR-AUC (Average Precision) and CV ROC-AUC with standard deviations.
-- **Statistical Tie Rule:** Models within 1 standard deviation of the top model are disclosed as statistically tied.
-- **Tie-Breaker:** Broken by lower False Positive Rate at fixed 70% recall, model simplicity, and interpretability.
+- **Closeness Rule:** Models whose mean CV PR-AUC is within 1 standard deviation of the highest are considered practically close based on observed cross-validation variation (not a formal hypothesis test).
+- **Tie-Breaker:** Broken by lower Out-Of-Fold (OOF) False Positive Rate at fixed 70% recall on the training set, model simplicity, and interpretability. The test set was strictly held out and untouched during this selection.
 """))
 
     cells.append(nbf.v4.new_code_cell("""comp_csv = os.path.join(PROJECT_ROOT, "reports", "results_comparison.csv")
@@ -183,14 +183,14 @@ print("=== Imbalance Treatment Comparison (5-Fold CV PR-AUC & ROC-AUC) ===")
 display(imb_df)
 """))
 
-    cells.append(nbf.v4.new_markdown_cell("""**Empirical Finding:** Class imbalance handling primarily shifts the uncalibrated probability threshold rather than improving ranking discrimination (PR-AUC is ~0.72 across all three treatments). Explicit decision threshold tuning on calibrated probabilities is more effective and avoids distortion.
+    cells.append(nbf.v4.new_markdown_cell("""**Empirical Finding:** Class imbalance handling primarily shifts the uncalibrated probability threshold rather than improving ranking discrimination (PR-AUC is ~0.72 across all three treatments). Explicit decision threshold tuning on predicted response probabilities is more effective and avoids distortion.
 """))
 
     # Section 7: OOF Threshold Optimization & Business Simulation
     cells.append(nbf.v4.new_markdown_cell(f"""## 7. Dual Threshold Optimization & Economic Business Simulation
 Thresholds were tuned exclusively on training Out-Of-Fold (OOF) cross-validation predictions:
-- **F1-Optimal Threshold ($t = {f1_t:.2f}$):** Maximizes harmonic mean of precision and recall.
-- **Profit-Optimal Threshold ($t = {profit_t:.2f}$):** Derived from the economic break-even probability ($r = \\${cost_per_contact:.2f} / \\${profit_per_responder:.2f} = {break_even_p:.2f}$).
+- **F1-Optimal Threshold ($t = {f1_t:.2f}$):** Maximizes harmonic mean of precision and recall on training OOF predictions.
+- **Profit-Optimal Threshold ($t = {profit_t:.2f}$):** Empirically selected simulated profit-maximizing threshold on training OOF predictions, informed by theoretical break-even probability ($r = \\${cost_per_contact:.2f} / \\${profit_per_responder:.2f} = {break_even_p:.2f}$) under assumed campaign economics.
 
 The four strategies were evaluated once on the untouched held-out test cohort:
 """))
@@ -207,7 +207,7 @@ display(sim_df)
 
     # Section 8: Probability Calibration
     cells.append(nbf.v4.new_markdown_cell("""## 8. Probability Calibration (FrozenEstimator)
-Using scikit-learn's modern `FrozenEstimator` wrapped within `CalibratedClassifierCV`, we calibrated probabilities on validation data and evaluated Brier scores:
+Using scikit-learn's modern `FrozenEstimator` wrapped within `CalibratedClassifierCV`, we evaluated probability calibration on validation data and assessed Brier scores:
 """))
 
     cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "calibration_curve.png"), width=600))"""))
@@ -237,38 +237,40 @@ print("=== Customer Persona Profiles: Actual vs Predicted Responders ===")
 display(prof_df)
 """))
 
+    top_20_capture_val = m.get('top_20_percent_capture', {}).get('capture_rate', 0.746) * 100
+
     # Section 10: Verified Answers to Assignment Questions
     cells.append(nbf.v4.new_markdown_cell(f"""## 10. Direct Answers to the 6 Core Research Questions
 
 ### Question 1: Can campaign responses be predicted?
-**Answer:** **Yes, with high statistical confidence.**  
-The deployed model achieves a held-out test **ROC-AUC of {res_df_winner['ROC-AUC']:.4f}** (95% bootstrap CI: [{auc_ci['ci_lower']:.4f}, {auc_ci['ci_upper']:.4f}]) and **PR-AUC of {res_df_winner['PR-AUC']:.4f}** (95% bootstrap CI: [{pr_ci['ci_lower']:.4f}, {pr_ci['ci_upper']:.4f}]). In gains analysis, the top 20% of scored customers capture **{res_df_winner['Recall']*100:.1f}%+ of all campaign responders**, demonstrating substantial predictive power over random targeting.
+**Answer:** **Yes, with high statistical confidence within the simulated cohort.**  
+The deployed model achieves a held-out test **ROC-AUC of {res_df_winner['ROC-AUC']:.4f}** (95% bootstrap CI: [{auc_ci['ci_lower']:.4f}, {auc_ci['ci_upper']:.4f}]) and **PR-AUC of {res_df_winner['PR-AUC']:.4f}** (95% bootstrap CI: [{pr_ci['ci_lower']:.4f}, {pr_ci['ci_upper']:.4f}]). In gains ranking analysis, targeting the top 20% of highest-propensity scored customers captures **{top_20_capture_val:.1f}% of all actual campaign responders** (independent of any decision threshold), demonstrating strong ranking ability over random targeting (which would only capture 20%).
 
 ### Question 2: Which customer characteristics influence response?
-**Answer:** **Past campaign response history and digital email engagement overwhelmingly dominate static demographics.**  
-1. `previous_campaign_response` (Odds Ratio = **{odds_ratios.get('previous_campaign_response', 5.5174):.4f}**): Customers who responded previously have >5.5x higher odds of responding again.
-2. `email_engagement` (Odds Ratio = **{odds_ratios.get('email_engagement', 3.3052):.4f}**): Responders exhibit over 50% average email open/click engagement.
-3. `discount_usage` and `purchase_frequency` (Odds Ratios ~2.0 - 2.1): Price sensitivity and velocity double response likelihood.
-Static demographic attributes (`income` and `age_group`) exhibit minimal explanatory power compared to behavioral interaction metrics.
+**Answer:** **Within the simulated dataset, past campaign response history and digital email engagement exhibit the strongest association.**  
+1. `previous_campaign_response` (Odds Ratio = **{odds_ratios.get('previous_campaign_response', 5.5174):.4f}**): Binary flag indicating that customers who responded in past campaigns have over 5.5x higher odds of responding again.
+2. `email_engagement` (Odds Ratio = **{odds_ratios.get('email_engagement', 3.3052):.4f}**): Continuous standardized feature; a 1-standard-deviation increase corresponds to ~3.3x higher odds.
+3. `discount_usage` and `purchase_frequency` (Odds Ratios ~2.0 - 2.1 per 1 SD increase): Price sensitivity and velocity increase response likelihood.
+Static demographic attributes (`income` and `age_group`) exhibit minimal explanatory power compared to behavioral interaction metrics. Note that because this dataset is synthetically generated, these findings reflect the data-generating process.
 
 ### Question 3: Which algorithm performs best?
-**Answer:** **{winner_name} (Calibrated).**  
-Across 5-fold cross-validation, Logistic Regression achieved a CV PR-AUC of **{cv_info['cv_pr_auc_mean']:.4f} ± {cv_info['cv_pr_auc_std']:.4f}** and CV ROC-AUC of **{cv_info['cv_roc_auc_mean']:.4f} ± {cv_info['cv_roc_auc_std']:.4f}**. While Gradient Boosting performed similarly (CV PR-AUC: {m['cv_metrics']['Gradient Boosting']['cv_pr_auc_mean']:.4f} ± {m['cv_metrics']['Gradient Boosting']['cv_pr_auc_std']:.4f}), both models are within 1 standard deviation and statistically tied. Logistic Regression broke the tie decisively by delivering a lower False Positive Rate at 70% recall (**{cv_info['fpr_at_recall_70']:.4f} vs {m['cv_metrics']['Gradient Boosting']['fpr_at_recall_70']:.4f}**), along with superior operational interpretability and microsecond inference latency.
+**Answer:** **{winner_name} (Deployed: {deployed_name}).**  
+Across 5-fold cross-validation on training data alone, Logistic Regression achieved a CV PR-AUC of **{cv_info['cv_pr_auc_mean']:.4f} ± {cv_info['cv_pr_auc_std']:.4f}** and CV ROC-AUC of **{cv_info['cv_roc_auc_mean']:.4f} ± {cv_info['cv_roc_auc_std']:.4f}**. While Gradient Boosting achieved similar mean performance (CV PR-AUC: {m['cv_metrics']['Gradient Boosting']['cv_pr_auc_mean']:.4f} ± {m['cv_metrics']['Gradient Boosting']['cv_pr_auc_std']:.4f}), the two models were practically close relative to fold-to-fold variation. Logistic Regression was selected defensibly based on lower training Out-Of-Fold False Positive Rate at 70% recall (**{cv_info['fpr_at_recall_70']:.4f} vs {m['cv_metrics']['Gradient Boosting']['fpr_at_recall_70']:.4f}**), model parsimony, and operational transparency without using test-set data.
 
 ### Question 4: Can ML reduce unnecessary marketing expenditure?
-**Answer:** **Yes, by {sim[3]['Cost Saved vs All (%)']:.1f}% to {sim[2]['Cost Saved vs All (%)']:.1f}%.**  
+**Answer:** **Yes, simulated cost savings range from {sim[3]['Cost Saved vs All (%)']:.1f}% to {sim[2]['Cost Saved vs All (%)']:.1f}% under assumed campaign economics.**  
 In the 1,000-customer test cohort:
 - Mass outreach costs **${sim[0]['Total Cost ($)']:,.2f}** with {int(sim[0]['Wasted Contacts (FP)'])} wasted contacts, yielding **${sim[0]['Net Profit ($)']:,.2f}** in net profit.
 - F1-Optimal targeting costs **${sim[2]['Total Cost ($)']:,.2f}**, saving **${sim[0]['Total Cost ($)'] - sim[2]['Total Cost ($)']:,.2f} ({sim[2]['Cost Saved vs All (%)']:.1f}% cost reduction)**.
-- Profit-Optimal targeting costs **${sim[3]['Total Cost ($)']:,.2f}**, saving **${sim[0]['Total Cost ($)'] - sim[3]['Total Cost ($)']:,.2f} ({sim[3]['Cost Saved vs All (%)']:.1f}% cost reduction)** while maximizing total profit.
+- Profit-Optimal targeting costs **${sim[3]['Total Cost ($)']:,.2f}**, saving **${sim[0]['Total Cost ($)'] - sim[3]['Total Cost ($)']:,.2f} ({sim[3]['Cost Saved vs All (%)']:.1f}% cost reduction)** while maximizing simulated net profit.
 
 ### Question 5: How can false positives be reduced?
-**Answer:** **Through threshold optimization and calibrated risk scoring.**  
-Operating at the default 0.50 threshold restricts False Positives to only {int(sim[1]['Wasted Contacts (FP)'])} ({sim[1]['Wasted Contacts (FP)']/799*100:.1f}% of total negatives), but misses {201 - int(sim[1]['Responders Reached'])} responders. By calibrating probabilities and tuning the decision threshold via OOF cross-validation, marketing managers can precisely calibrate the False Positive Rate to their organization's tolerance and working capital limits.
+**Answer:** **Through decision threshold tuning on predicted response probabilities.**  
+Operating at the default 0.50 threshold restricts False Positives to only {int(sim[1]['Wasted Contacts (FP)'])} ({sim[1]['Wasted Contacts (FP)']/799*100:.1f}% of total negatives), but misses {201 - int(sim[1]['Responders Reached'])} responders. By evaluating predicted response probabilities and tuning the decision threshold on training OOF predictions, marketing managers can choose an operating point aligned with working capital limits and cost tolerance.
 
 ### Question 6: Can the model identify potential campaign responders?
-**Answer:** **Yes, capturing up to {sim[3]['Responders Reached']/201*100:.1f}% of responders while contacting only {sim[3]['Targeted Contacts']/10:.1f}% of the population.**  
-At the Profit-Optimal threshold ($t = {profit_t:.2f}$), the model captures **{int(sim[3]['Responders Reached'])} out of 201 actual responders**, yielding **${sim[3]['Net Profit ($)']:,.2f} net profit** and an ROI of **{sim[3]['ROI (%)']:.1f}%**.
+**Answer:** **Yes, capturing up to {sim[3]['Responders Reached']/201*100:.1f}% of responders while contacting only {sim[3]['Targeted Contacts']/10:.1f}% of the population in the simulation.**  
+At the Profit-Optimal threshold ($t = {profit_t:.2f}$), the model captures **{int(sim[3]['Responders Reached'])} out of 201 actual responders**, yielding **${sim[3]['Net Profit ($)']:,.2f} simulated net profit** and an ROI of **{sim[3]['ROI (%)']:.1f}%** under assumed economics.
 
 ---
 
