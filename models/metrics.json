@@ -1,7 +1,7 @@
 {
   "best_model_name": "Logistic Regression",
   "deployed_model_name": "Logistic Regression",
-  "selection_justification": "Statistical Tie Disclosed: The top two models, Logistic Regression (CV PR-AUC: 0.7223 \u00b1 0.0267) and Gradient Boosting (CV PR-AUC: 0.7169 \u00b1 0.0254), are within 1 standard deviation (0.0054 < 0.0267). Therefore, they are statistically tied on ranking performance. Logistic Regression broke the tie with lower FPR at 70% recall (0.1026 vs 0.1214).",
+  "selection_justification": "The top two models on development cross-validation, Logistic Regression (CV PR-AUC: 0.7223 \u00b1 0.0267) and Gradient Boosting (CV PR-AUC: 0.7169 \u00b1 0.0254), are practically close, with a score difference (0.0054) smaller than the observed fold-to-fold cross-validation variation (0.0267). Based strictly on training data cross-validation and out-of-fold metrics, Logistic Regression was selected because Logistic Regression demonstrated lower training out-of-fold FPR at 70% recall (0.1115 vs 0.1165). Additionally, Logistic Regression offers lower architectural complexity, closed-form linear coefficients, and direct interpretability.",
   "best_model_params": {
     "classifier__C": 1.0,
     "classifier__solver": "lbfgs"
@@ -9,6 +9,13 @@
   "f1_optimal_threshold": 0.3,
   "profit_optimal_threshold": 0.07,
   "default_threshold": 0.5,
+  "top_20_percent_capture": {
+    "k_percent": 20.0,
+    "n_targeted": 200,
+    "responders_captured": 132,
+    "total_responders": 201,
+    "capture_rate": 0.6567164179104478
+  },
   "test_metrics_default_threshold": {
     "threshold": 0.5,
     "accuracy": 0.872,
@@ -70,7 +77,16 @@
   },
   "cv_metrics": {
     "Logistic Regression": {
-      "best_params": {
+      "CV_PR_AUC_Mean": 0.7222971283573804,
+      "CV_PR_AUC_Std": 0.0267048533977443,
+      "CV_ROC_AUC_Mean": 0.8883014745294874,
+      "CV_ROC_AUC_Std": 0.010372167553313725,
+      "OOF_PR_AUC": 0.7228113417336269,
+      "OOF_ROC_AUC": 0.8880434157718178,
+      "OOF_Threshold": 0.3,
+      "OOF_F1": 0.661036036036036,
+      "OOF_FPR_at_Recall_70": 0.11145898559799625,
+      "Best_Params": {
         "classifier__C": 1.0,
         "classifier__solver": "lbfgs"
       },
@@ -78,12 +94,25 @@
       "cv_pr_auc_std": 0.0267048533977443,
       "cv_roc_auc_mean": 0.8883014745294874,
       "cv_roc_auc_std": 0.010372167553313725,
+      "fpr_at_recall_70": 0.11145898559799625,
       "oof_threshold": 0.3,
       "oof_f1": 0.661036036036036,
-      "fpr_at_recall_70": 0.10262828535669587
+      "best_params": {
+        "classifier__C": 1.0,
+        "classifier__solver": "lbfgs"
+      }
     },
     "K-Nearest Neighbors": {
-      "best_params": {
+      "CV_PR_AUC_Mean": 0.6886569459437959,
+      "CV_PR_AUC_Std": 0.029130308928553728,
+      "CV_ROC_AUC_Mean": 0.8663142578322314,
+      "CV_ROC_AUC_Std": 0.013077872816219738,
+      "OOF_PR_AUC": 0.6866526244757204,
+      "OOF_ROC_AUC": 0.8659498035242881,
+      "OOF_Threshold": 0.24999999999999994,
+      "OOF_F1": 0.6357022943480694,
+      "OOF_FPR_at_Recall_70": 0.1274264245460238,
+      "Best_Params": {
         "classifier__n_neighbors": 21,
         "classifier__weights": "distance"
       },
@@ -91,12 +120,25 @@
       "cv_pr_auc_std": 0.029130308928553728,
       "cv_roc_auc_mean": 0.8663142578322314,
       "cv_roc_auc_std": 0.013077872816219738,
+      "fpr_at_recall_70": 0.1274264245460238,
       "oof_threshold": 0.24999999999999994,
       "oof_f1": 0.6357022943480694,
-      "fpr_at_recall_70": 0.15018773466833543
+      "best_params": {
+        "classifier__n_neighbors": 21,
+        "classifier__weights": "distance"
+      }
     },
     "Decision Tree": {
-      "best_params": {
+      "CV_PR_AUC_Mean": 0.6050938188385881,
+      "CV_PR_AUC_Std": 0.027601197477217426,
+      "CV_ROC_AUC_Mean": 0.8382491572503963,
+      "CV_ROC_AUC_Std": 0.011321079720367807,
+      "OOF_PR_AUC": 0.6065874998340667,
+      "OOF_ROC_AUC": 0.8372423247062188,
+      "OOF_Threshold": 0.26999999999999996,
+      "OOF_F1": 0.6074766355140186,
+      "OOF_FPR_at_Recall_70": 0.15779586725109582,
+      "Best_Params": {
         "classifier__criterion": "gini",
         "classifier__max_depth": 5,
         "classifier__min_samples_split": 2
@@ -105,12 +147,26 @@
       "cv_pr_auc_std": 0.027601197477217426,
       "cv_roc_auc_mean": 0.8382491572503963,
       "cv_roc_auc_std": 0.011321079720367807,
+      "fpr_at_recall_70": 0.15779586725109582,
       "oof_threshold": 0.26999999999999996,
       "oof_f1": 0.6074766355140186,
-      "fpr_at_recall_70": 0.2002503128911139
+      "best_params": {
+        "classifier__criterion": "gini",
+        "classifier__max_depth": 5,
+        "classifier__min_samples_split": 2
+      }
     },
     "Random Forest": {
-      "best_params": {
+      "CV_PR_AUC_Mean": 0.7143462403173683,
+      "CV_PR_AUC_Std": 0.024898324062908685,
+      "CV_ROC_AUC_Mean": 0.8818511753343634,
+      "CV_ROC_AUC_Std": 0.01016796676337624,
+      "OOF_PR_AUC": 0.710956798638575,
+      "OOF_ROC_AUC": 0.881381964632818,
+      "OOF_Threshold": 0.27999999999999997,
+      "OOF_F1": 0.6472805600430802,
+      "OOF_FPR_at_Recall_70": 0.12147777082028804,
+      "Best_Params": {
         "classifier__max_depth": 8,
         "classifier__min_samples_split": 5,
         "classifier__n_estimators": 150
@@ -119,24 +175,50 @@
       "cv_pr_auc_std": 0.024898324062908685,
       "cv_roc_auc_mean": 0.8818511753343634,
       "cv_roc_auc_std": 0.01016796676337624,
+      "fpr_at_recall_70": 0.12147777082028804,
       "oof_threshold": 0.27999999999999997,
       "oof_f1": 0.6472805600430802,
-      "fpr_at_recall_70": 0.12891113892365458
+      "best_params": {
+        "classifier__max_depth": 8,
+        "classifier__min_samples_split": 5,
+        "classifier__n_estimators": 150
+      }
     },
     "Naive Bayes": {
-      "best_params": {
+      "CV_PR_AUC_Mean": 0.6816141629637427,
+      "CV_PR_AUC_Std": 0.03464924498338234,
+      "CV_ROC_AUC_Mean": 0.875681199567144,
+      "CV_ROC_AUC_Std": 0.014125741080940914,
+      "OOF_PR_AUC": 0.6790465395459128,
+      "OOF_ROC_AUC": 0.8752503530969202,
+      "OOF_Threshold": 0.3999999999999999,
+      "OOF_F1": 0.6133333333333333,
+      "OOF_FPR_at_Recall_70": 0.1527864746399499,
+      "Best_Params": {
         "classifier__var_smoothing": 1e-09
       },
       "cv_pr_auc_mean": 0.6816141629637427,
       "cv_pr_auc_std": 0.03464924498338234,
       "cv_roc_auc_mean": 0.875681199567144,
       "cv_roc_auc_std": 0.014125741080940914,
+      "fpr_at_recall_70": 0.1527864746399499,
       "oof_threshold": 0.3999999999999999,
       "oof_f1": 0.6133333333333333,
-      "fpr_at_recall_70": 0.14893617021276595
+      "best_params": {
+        "classifier__var_smoothing": 1e-09
+      }
     },
     "Gradient Boosting": {
-      "best_params": {
+      "CV_PR_AUC_Mean": 0.7169151607295541,
+      "CV_PR_AUC_Std": 0.025357237037322584,
+      "CV_ROC_AUC_Mean": 0.884490298344111,
+      "CV_ROC_AUC_Std": 0.007482167401696584,
+      "OOF_PR_AUC": 0.7143680948426073,
+      "OOF_ROC_AUC": 0.8837378863284292,
+      "OOF_Threshold": 0.29,
+      "OOF_F1": 0.648,
+      "OOF_FPR_at_Recall_70": 0.11646837820914215,
+      "Best_Params": {
         "classifier__learning_rate": 0.05,
         "classifier__max_depth": 3,
         "classifier__n_estimators": 100
@@ -145,9 +227,14 @@
       "cv_pr_auc_std": 0.025357237037322584,
       "cv_roc_auc_mean": 0.884490298344111,
       "cv_roc_auc_std": 0.007482167401696584,
+      "fpr_at_recall_70": 0.11646837820914215,
       "oof_threshold": 0.29,
       "oof_f1": 0.648,
-      "fpr_at_recall_70": 0.1214017521902378
+      "best_params": {
+        "classifier__learning_rate": 0.05,
+        "classifier__max_depth": 3,
+        "classifier__n_estimators": 100
+      }
     }
   },
   "brier_scores": {

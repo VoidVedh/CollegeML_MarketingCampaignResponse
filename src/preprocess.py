@@ -125,6 +125,7 @@ def create_preprocessor() -> ColumnTransformer:
 def validate_schema(df: pd.DataFrame, require_target: bool = True) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Validates that a DataFrame conforms to the expected feature schema.
+    Strictly checks target values when required (no silent conversion of missing/invalid targets).
     Preserves NaN in categorical columns rather than converting to string 'nan'.
     Audits missing values, out-of-range anomalies, and unknown categories.
     
@@ -133,17 +134,36 @@ def validate_schema(df: pd.DataFrame, require_target: bool = True) -> Tuple[pd.D
     """
     missing_cols = [col for col in FEATURE_COLUMNS if col not in df.columns]
     if missing_cols:
-        raise ValueError(f"Uploaded data missing required feature columns: {missing_cols}")
+        raise ValueError(f"Data missing required feature columns: {missing_cols}")
     
-    if require_target and TARGET_COLUMN not in df.columns:
-        raise ValueError(f"Uploaded data missing target column '{TARGET_COLUMN}'")
+    if require_target:
+        if TARGET_COLUMN not in df.columns:
+            raise ValueError(f"Data missing required target column '{TARGET_COLUMN}'")
+        
+        # Target validation: Must not contain missing values or non-binary labels
+        target_series = pd.to_numeric(df[TARGET_COLUMN], errors='coerce')
+        if target_series.isna().any():
+            missing_target_count = int(target_series.isna().sum())
+            raise ValueError(
+                f"Target column '{TARGET_COLUMN}' contains {missing_target_count} missing or malformed non-numeric values. "
+                "Training target labels cannot be silently imputed or converted to zero."
+            )
+        
+        unique_targets = set(target_series.unique())
+        if not unique_targets.issubset({0, 1}):
+            invalid_vals = unique_targets - {0, 1}
+            raise ValueError(
+                f"Target column '{TARGET_COLUMN}' contains invalid values {invalid_vals}. "
+                "Target values must strictly be binary: 0 (non-responder) or 1 (responder)."
+            )
         
     df_clean = df.copy()
     audit_report = {
         'total_rows': len(df_clean),
         'missing_rows': {},
         'out_of_range_rows': {},
-        'unknown_categories': {}
+        'unknown_categories': {},
+        'negative_values_clamped': {}
     }
     
     # 1. Categorical handling: Preserve NaN properly
@@ -179,14 +199,16 @@ def validate_schema(df: pd.DataFrame, require_target: bool = True) -> Tuple[pd.D
             
         # Range sanity checks
         if col in ['email_engagement', 'discount_usage']:
+            # Engagement rates are strictly bounded between 0.0 and 1.0 by mathematical definition
             out_mask = (df_clean[col] < 0.0) | (df_clean[col] > 1.0)
             if out_mask.any():
                 audit_report['out_of_range_rows'][col] = int(out_mask.sum())
                 df_clean[col] = np.clip(df_clean[col], 0.0, 1.0)
         elif col in ['income', 'previous_purchases', 'purchase_frequency', 'website_visits']:
+            # Non-negative counts/amounts: clamp negative values to 0.0 with explicit audit logging
             out_mask = df_clean[col] < 0.0
             if out_mask.any():
-                audit_report['out_of_range_rows'][col] = int(out_mask.sum())
+                audit_report['negative_values_clamped'][col] = int(out_mask.sum())
                 df_clean.loc[out_mask, col] = 0.0
                 
     # 3. Binary feature: previous_campaign_response
@@ -201,7 +223,7 @@ def validate_schema(df: pd.DataFrame, require_target: bool = True) -> Tuple[pd.D
         df_clean.loc[out_bin, 'previous_campaign_response'] = (df_clean.loc[out_bin, 'previous_campaign_response'] > 0.5).astype(float)
         
     if require_target and TARGET_COLUMN in df_clean.columns:
-        df_clean[TARGET_COLUMN] = pd.to_numeric(df_clean[TARGET_COLUMN], errors='coerce').fillna(0).astype(int)
+        df_clean[TARGET_COLUMN] = target_series.astype(int)
         
     return df_clean, audit_report
 
@@ -213,19 +235,20 @@ def load_and_split_data(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """
     Loads dataset, validates schema, and performs stratified 80/20 train/test split.
+    Uses robust project-relative paths.
     """
     if filepath is None:
         candidates = [
-            "data/campaign_data.csv",
-            "../data/campaign_data.csv",
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "campaign_data.csv")
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "campaign_data.csv"),
+            os.path.join(os.getcwd(), "data", "campaign_data.csv"),
+            "data/campaign_data.csv"
         ]
         for c in candidates:
             if os.path.exists(c):
                 filepath = os.path.abspath(c)
                 break
         if filepath is None:
-            filepath = "data/campaign_data.csv"
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "campaign_data.csv")
             
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Dataset not found at {filepath}")

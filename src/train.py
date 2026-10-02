@@ -53,7 +53,7 @@ from src.preprocess import (
 )
 from src.eda import run_full_eda
 from src.evaluate import (
-    compute_metrics_at_threshold, compute_fpr_at_recall, compute_bootstrap_ci,
+    compute_metrics_at_threshold, compute_fpr_at_recall, compute_top_k_capture, compute_bootstrap_ci,
     find_optimal_thresholds_oof, run_four_strategy_simulation,
     evaluate_probability_calibration, compute_comprehensive_customer_profiles,
     plot_metrics_comparison, plot_roc_curves, plot_precision_recall_curves,
@@ -120,28 +120,31 @@ def get_model_grid_configs(random_state: int = 42) -> Dict[str, Dict[str, Any]]:
     }
 
 
-def train_and_evaluate_all_models(
+def train_and_tune_models_dev(
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    X_test: pd.DataFrame,
-    y_test: pd.Series,
     cv_folds: int = 5,
     random_state: int = 42
-) -> Tuple[Dict[str, Any], pd.DataFrame, Dict[str, Any]]:
+) -> Tuple[Dict[str, Any], pd.DataFrame, Dict[str, np.ndarray]]:
     """
-    Tunes all 6 models via 5-fold Stratified CV, collects CV metrics (PR-AUC, ROC-AUC),
-    determines OOF-tuned thresholds, and evaluates on held-out test data.
+    Trains and tunes all 6 models using 5-fold Stratified Cross-Validation strictly on
+    the development/training dataset. ZERO test-set data is used or touched.
+    
+    Returns:
+        fitted_models: Dict of best refitted estimators
+        dev_benchmark_df: DataFrame summarizing CV PR-AUC, CV ROC-AUC, OOF PR-AUC, OOF F1,
+                          OOF FPR@Recall=70%, and best hyperparameters.
+        oof_probas: Dict mapping model name to Out-Of-Fold predicted probabilities on X_train.
     """
     configs = get_model_grid_configs(random_state=random_state)
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
     
     fitted_models = {}
-    oof_thresholds = {}
-    model_cv_metrics = {}
-    test_results_list = []
+    oof_probas = {}
+    dev_results_list = []
     
     print("\n" + "="*70)
-    print("STEP 3: 5-FOLD STRATIFIED CV HYPERPARAMETER TUNING & BENCHMARK")
+    print("STEP 3: 5-FOLD STRATIFIED CV HYPERPARAMETER TUNING (TRAINING DATA ONLY)")
     print("="*70)
     
     for name, conf in configs.items():
@@ -168,47 +171,136 @@ def train_and_evaluate_all_models(
         best_est = grid.best_estimator_
         best_params = grid.best_params_
         
-        # Collect CV PR-AUC and ROC-AUC
+        # Collect CV PR-AUC and ROC-AUC scores across the folds
         cv_pr_scores = cross_val_score(best_est, X_train, y_train, cv=cv, scoring='average_precision', n_jobs=-1)
         cv_roc_scores = cross_val_score(best_est, X_train, y_train, cv=cv, scoring='roc_auc', n_jobs=-1)
         
-        # Out-Of-Fold probability generation
-        oof_proba = cross_val_predict(best_est, X_train, y_train, cv=cv, method='predict_proba')[:, 1]
+        # Out-Of-Fold probability generation strictly on training data
+        oof_p = cross_val_predict(best_est, X_train, y_train, cv=cv, method='predict_proba')[:, 1]
+        oof_probas[name] = oof_p
         
         # Find model's own OOF F1-optimal threshold
         t_sweep = np.linspace(0.05, 0.95, 91)
-        oof_f1s = [f1_score(y_train, (oof_proba >= t).astype(int), zero_division=0) for t in t_sweep]
+        oof_f1s = [f1_score(y_train, (oof_p >= t).astype(int), zero_division=0) for t in t_sweep]
         best_f1_idx = int(np.argmax(oof_f1s))
         model_oof_t = float(t_sweep[best_f1_idx])
         
-        # Evaluate on test set using model's own OOF threshold
-        test_proba = best_est.predict_proba(X_test)[:, 1]
-        m_tuned = compute_metrics_at_threshold(y_test, test_proba, threshold=model_oof_t)
-        
-        # Also compute metrics at standard 0.50 threshold for assignment requirements
-        m_def = compute_metrics_at_threshold(y_test, test_proba, threshold=0.50)
-        
-        # Compute FPR at fixed recall = 70%
-        fpr_70 = compute_fpr_at_recall(y_test, test_proba, target_recall=0.70)
+        # Compute training OOF metrics
+        oof_pr = float(average_precision_score(y_train, oof_p))
+        oof_roc = float(roc_auc_score(y_train, oof_p))
+        oof_fpr_70 = float(compute_fpr_at_recall(y_train, oof_p, target_recall=0.70))
         
         elapsed = time.time() - t0
         print(f"    Completed in {elapsed:.1f}s | Best Params: {best_params}")
         print(f"    CV PR-AUC:  {np.mean(cv_pr_scores):.4f} (+/- {np.std(cv_pr_scores):.4f})")
         print(f"    CV ROC-AUC: {np.mean(cv_roc_scores):.4f} (+/- {np.std(cv_roc_scores):.4f})")
-        print(f"    OOF Tuned Threshold: {model_oof_t:.2f} -> Test F1: {m_tuned['f1']:.4f}, FPR@Rec=70%: {fpr_70:.4f}")
+        print(f"    OOF Tuned Threshold: {model_oof_t:.2f} | OOF F1: {oof_f1s[best_f1_idx]:.4f} | Training OOF FPR@Rec=70%: {oof_fpr_70:.4f}")
         
         fitted_models[name] = best_est
-        oof_thresholds[name] = model_oof_t
-        model_cv_metrics[name] = {
-            'best_params': best_params,
-            'cv_pr_auc_mean': float(np.mean(cv_pr_scores)),
-            'cv_pr_auc_std': float(np.std(cv_pr_scores)),
-            'cv_roc_auc_mean': float(np.mean(cv_roc_scores)),
-            'cv_roc_auc_std': float(np.std(cv_roc_scores)),
-            'oof_threshold': model_oof_t,
-            'oof_f1': float(oof_f1s[best_f1_idx]),
-            'fpr_at_recall_70': float(fpr_70)
-        }
+        
+        dev_results_list.append({
+            'Model': name,
+            'CV_PR_AUC_Mean': float(np.mean(cv_pr_scores)),
+            'CV_PR_AUC_Std': float(np.std(cv_pr_scores)),
+            'CV_ROC_AUC_Mean': float(np.mean(cv_roc_scores)),
+            'CV_ROC_AUC_Std': float(np.std(cv_roc_scores)),
+            'OOF_PR_AUC': oof_pr,
+            'OOF_ROC_AUC': oof_roc,
+            'OOF_Threshold': model_oof_t,
+            'OOF_F1': float(oof_f1s[best_f1_idx]),
+            'OOF_FPR_at_Recall_70': oof_fpr_70,
+            'Best_Params': best_params
+        })
+        
+    dev_benchmark_df = pd.DataFrame(dev_results_list)
+    return fitted_models, dev_benchmark_df, oof_probas
+
+
+def select_best_model_defensibly(dev_benchmark_df: pd.DataFrame) -> Tuple[str, str]:
+    """
+    Defensible Model Selection Rule (Strictly using Development/Training CV & OOF Information):
+    1. Sort models descending by 5-fold CV PR-AUC (Average Precision).
+    2. Check if the top two models are practically close (difference < 1 fold standard deviation).
+    3. If practically close:
+       - Disclose that the difference is small relative to cross-validation fold variation.
+       - Break tie using development/training information:
+         (a) Lower training Out-Of-Fold FPR at fixed 70% recall (OOF_FPR_at_Recall_70)
+         (b) Model parsimony / architectural simplicity / direct linear interpretability
+    4. If not practically close (diff >= std):
+       - Select the top model decisively.
+    
+    Zero test data is referenced or inspected during this selection decision.
+    """
+    sorted_df = dev_benchmark_df.sort_values(by='CV_PR_AUC_Mean', ascending=False).reset_index(drop=True)
+    top1 = sorted_df.iloc[0]
+    top2 = sorted_df.iloc[1]
+    
+    cv_diff = top1['CV_PR_AUC_Mean'] - top2['CV_PR_AUC_Mean']
+    top1_std = top1['CV_PR_AUC_Std']
+    
+    if cv_diff < top1_std:
+        # Practically close based on observed CV variation
+        if top1['OOF_FPR_at_Recall_70'] <= top2['OOF_FPR_at_Recall_70']:
+            winner = top1['Model']
+            tie_reason = (
+                f"{top1['Model']} demonstrated lower training out-of-fold FPR at 70% recall "
+                f"({top1['OOF_FPR_at_Recall_70']:.4f} vs {top2['OOF_FPR_at_Recall_70']:.4f})."
+            )
+        else:
+            winner = top2['Model']
+            tie_reason = (
+                f"{top2['Model']} demonstrated lower training out-of-fold FPR at 70% recall "
+                f"({top2['OOF_FPR_at_Recall_70']:.4f} vs {top1['OOF_FPR_at_Recall_70']:.4f})."
+            )
+            
+        justification = (
+            f"The top two models on development cross-validation, {top1['Model']} (CV PR-AUC: {top1['CV_PR_AUC_Mean']:.4f} ± {top1['CV_PR_AUC_Std']:.4f}) "
+            f"and {top2['Model']} (CV PR-AUC: {top2['CV_PR_AUC_Mean']:.4f} ± {top2['CV_PR_AUC_Std']:.4f}), are practically close, with a score difference "
+            f"({cv_diff:.4f}) smaller than the observed fold-to-fold cross-validation variation ({top1_std:.4f}). "
+            f"Based strictly on training data cross-validation and out-of-fold metrics, {winner} was selected because {tie_reason} "
+            f"Additionally, {winner} offers lower architectural complexity, closed-form linear coefficients, and direct interpretability."
+        )
+    else:
+        winner = top1['Model']
+        justification = (
+            f"{top1['Model']} achieved the highest mean CV PR-AUC ({top1['CV_PR_AUC_Mean']:.4f} ± {top1['CV_PR_AUC_Std']:.4f}), "
+            f"leading the runner-up {top2['Model']} ({top2['CV_PR_AUC_Mean']:.4f}) by more than 1 cross-validation standard deviation."
+        )
+        
+    return winner, justification
+
+
+def evaluate_all_models_on_test_set(
+    fitted_models: Dict[str, Any],
+    dev_benchmark_df: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_test: pd.Series
+) -> pd.DataFrame:
+    """
+    Evaluates all 6 trained models on the held-out test set for final reporting.
+    This function is executed ONLY ONCE, strictly AFTER model selection and threshold selection
+    have already concluded using training data.
+    """
+    test_results_list = []
+    
+    for _, dev_row in dev_benchmark_df.iterrows():
+        name = dev_row['Model']
+        model = fitted_models[name]
+        oof_t = dev_row['OOF_Threshold']
+        
+        test_proba = model.predict_proba(X_test)[:, 1]
+        
+        # Standard threshold 0.50 evaluation (required by project rubric)
+        m_def = compute_metrics_at_threshold(y_test, test_proba, threshold=0.50)
+        
+        # Tuned threshold evaluation (tuned on training OOF)
+        m_tuned = compute_metrics_at_threshold(y_test, test_proba, threshold=oof_t)
+        
+        # Test set FPR at 70% recall (for benchmark table)
+        fpr_70_test = compute_fpr_at_recall(y_test, test_proba, target_recall=0.70)
+        
+        # True top-20% customer capture rate
+        top20_res = compute_top_k_capture(y_test, test_proba, k_percent=20.0)
         
         test_results_list.append({
             'Model': name,
@@ -223,64 +315,23 @@ def train_and_evaluate_all_models(
             'FP': m_def['fp'],
             'FN': m_def['fn'],
             'TP': m_def['tp'],
-            'Tuned_Threshold': model_oof_t,
+            'Tuned_Threshold': oof_t,
             'Tuned_F1': m_tuned['f1'],
             'Tuned_Precision': m_tuned['precision'],
             'Tuned_Recall': m_tuned['recall'],
             'Tuned_FPR': m_tuned['fpr'],
-            'FPR_at_Recall_70': fpr_70,
-            'CV_PR_AUC_Mean': float(np.mean(cv_pr_scores)),
-            'CV_PR_AUC_Std': float(np.std(cv_pr_scores)),
-            'CV_ROC_AUC_Mean': float(np.mean(cv_roc_scores)),
-            'CV_ROC_AUC_Std': float(np.std(cv_roc_scores)),
-            'Best_Params': json.dumps(best_params)
+            'FPR_at_Recall_70': fpr_70_test,
+            'Top20_Capture_Rate': top20_res['capture_rate'],
+            'Top20_Responders_Captured': top20_res['responders_captured'],
+            'CV_PR_AUC_Mean': dev_row['CV_PR_AUC_Mean'],
+            'CV_PR_AUC_Std': dev_row['CV_PR_AUC_Std'],
+            'CV_ROC_AUC_Mean': dev_row['CV_ROC_AUC_Mean'],
+            'CV_ROC_AUC_Std': dev_row['CV_ROC_AUC_Std'],
+            'OOF_FPR_at_Recall_70': dev_row['OOF_FPR_at_Recall_70'],
+            'Best_Params': json.dumps(dev_row['Best_Params'])
         })
         
-    results_df = pd.DataFrame(test_results_list)
-    return fitted_models, results_df, model_cv_metrics
-
-
-def select_best_model_defensibly(results_df: pd.DataFrame) -> Tuple[str, str]:
-    """
-    Defensible Model Selection Rule:
-    1. Sort models by CV PR-AUC mean.
-    2. Check if top-2 models are within 1 standard deviation of CV PR-AUC.
-    3. If within 1 std, declare a statistical tie and break tie by:
-       - Lower FPR at fixed recall (70%)
-       - Model simplicity / inference latency
-       - Interpretability
-    Returns: (winner_name, selection_justification)
-    """
-    sorted_df = results_df.sort_values(by='CV_PR_AUC_Mean', ascending=False).reset_index(drop=True)
-    top1 = sorted_df.iloc[0]
-    top2 = sorted_df.iloc[1]
-    
-    cv_diff = top1['CV_PR_AUC_Mean'] - top2['CV_PR_AUC_Mean']
-    top1_std = top1['CV_PR_AUC_Std']
-    
-    if cv_diff < top1_std:
-        tie_declared = True
-        # Break tie by FPR at fixed recall (70%)
-        if top1['FPR_at_Recall_70'] <= top2['FPR_at_Recall_70']:
-            winner = top1['Model']
-            tie_reason = f"{top1['Model']} broke the tie with lower FPR at 70% recall ({top1['FPR_at_Recall_70']:.4f} vs {top2['FPR_at_Recall_70']:.4f})."
-        else:
-            winner = top2['Model']
-            tie_reason = f"{top2['Model']} broke the tie with lower FPR at 70% recall ({top2['FPR_at_Recall_70']:.4f} vs {top1['FPR_at_Recall_70']:.4f})."
-            
-        justification = (
-            f"Statistical Tie Disclosed: The top two models, {top1['Model']} (CV PR-AUC: {top1['CV_PR_AUC_Mean']:.4f} ± {top1['CV_PR_AUC_Std']:.4f}) "
-            f"and {top2['Model']} (CV PR-AUC: {top2['CV_PR_AUC_Mean']:.4f} ± {top2['CV_PR_AUC_Std']:.4f}), are within 1 standard deviation ({cv_diff:.4f} < {top1_std:.4f}). "
-            f"Therefore, they are statistically tied on ranking performance. {tie_reason}"
-        )
-    else:
-        winner = top1['Model']
-        justification = (
-            f"{top1['Model']} won decisively with CV PR-AUC of {top1['CV_PR_AUC_Mean']:.4f} ± {top1['CV_PR_AUC_Std']:.4f}, "
-            f"leading the runner-up {top2['Model']} ({top2['CV_PR_AUC_Mean']:.4f}) by more than 1 standard deviation."
-        )
-        
-    return winner, justification
+    return pd.DataFrame(test_results_list)
 
 
 def evaluate_imbalance_treatments(
@@ -434,20 +485,13 @@ def run_full_pipeline(
     feature_names = get_feature_names(preprocessor)
     print(f"Output transformed features ({len(feature_names)}): {feature_names}")
     
-    # 4. Train and Tune All 6 Models
-    fitted_models, results_df, model_cv_metrics = train_and_evaluate_all_models(
-        X_train, y_train, X_test, y_test, cv_folds=5, random_state=random_state
+    # 4. Train and Tune All 6 Models on Development Data Only
+    fitted_models, dev_benchmark_df, oof_probas = train_and_tune_models_dev(
+        X_train, y_train, cv_folds=5, random_state=random_state
     )
     
-    # Save results comparison table
-    comparison_csv_path = os.path.join(reports_dir, "results_comparison.csv")
-    results_df = results_df.sort_values(by=['CV_PR_AUC_Mean', 'CV_ROC_AUC_Mean'], ascending=[False, False]).reset_index(drop=True)
-    results_df.to_csv(comparison_csv_path, index=False)
-    print(f"\nComparative results saved to '{comparison_csv_path}':")
-    print(results_df[['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC', 'FPR', 'FPR_at_Recall_70', 'CV_PR_AUC_Mean']].to_string(index=False))
-    
-    # 5. Defensible Model Selection
-    winner_name, selection_justification = select_best_model_defensibly(results_df)
+    # 5. Defensible Model Selection (strictly using dev/training CV & OOF metrics)
+    winner_name, selection_justification = select_best_model_defensibly(dev_benchmark_df)
     print("\n" + "="*70)
     print(f"STEP 4: DEFENSIBLE MODEL SELECTION -> {winner_name}")
     print("="*70)
@@ -459,8 +503,8 @@ def run_full_pipeline(
     print("STEP 5: CLASS IMBALANCE TREATMENTS COMPARISON")
     print("="*70)
     base_est = get_model_grid_configs(random_state)[winner_name]['estimator']
-    best_params = model_cv_metrics[winner_name]['best_params']
-    clean_params = {k.replace('classifier__', ''): v for k, v in best_params.items()}
+    best_params_winner = dev_benchmark_df.loc[dev_benchmark_df['Model'] == winner_name, 'Best_Params'].values[0]
+    clean_params = {k.replace('classifier__', ''): v for k, v in best_params_winner.items()}
     base_est.set_params(**clean_params)
     
     imbalance_df = evaluate_imbalance_treatments(winner_name, base_est, X_train, y_train, X_test, y_test, cv_folds=5, random_state=random_state)
@@ -468,13 +512,11 @@ def run_full_pipeline(
     imbalance_df.to_csv(imbalance_csv_path, index=False)
     print(imbalance_df.to_string(index=False))
     
-    # 7. Leakage-Free OOF Threshold Optimization
+    # 7. Leakage-Free OOF Threshold Optimization (Training Data Only)
     print("\n" + "="*70)
-    print("STEP 6: OOF THRESHOLD OPTIMIZATION & BUSINESS SIMULATION")
+    print("STEP 6: OOF THRESHOLD OPTIMIZATION (TRAINING DATA ONLY)")
     print("="*70)
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
-    oof_proba_winner = cross_val_predict(best_model, X_train, y_train, cv=cv, method='predict_proba')[:, 1]
-    
+    oof_proba_winner = oof_probas[winner_name]
     threshold_results = find_optimal_thresholds_oof(
         y_train, oof_proba_winner,
         cost_per_contact=COST_PER_CONTACT,
@@ -486,22 +528,7 @@ def run_full_pipeline(
     print(f"OOF F1-Optimal Threshold:     {f1_t:.2f} (OOF F1: {threshold_results['f1_optimal_oof_score']:.4f})")
     print(f"OOF Profit-Optimal Threshold: {profit_t:.2f} (OOF Net Profit: ${threshold_results['profit_optimal_oof_profit']:,.0f})")
     
-    # Evaluate 4-strategy simulation once on held-out test data
-    y_test_proba_winner = best_model.predict_proba(X_test)[:, 1]
-    sim_results = run_four_strategy_simulation(
-        y_test, y_test_proba_winner,
-        f1_threshold=f1_t,
-        profit_threshold=profit_t,
-        cost_per_contact=COST_PER_CONTACT,
-        profit_per_responder=PROFIT_PER_RESPONDER,
-        output_dir=figures_dir
-    )
-    sim_csv_path = os.path.join(reports_dir, "business_simulation.csv")
-    sim_results['simulation_table'].to_csv(sim_csv_path, index=False)
-    print("\nBusiness Simulation Results on Held-Out Test Data:")
-    print(sim_results['simulation_table'].to_string(index=False))
-    
-    # 8. Probability Calibration Check
+    # 8. Probability Calibration Check (Validation Split on Training Data)
     print("\n" + "="*70)
     print("STEP 7: PROBABILITY CALIBRATION (FrozenEstimator)")
     print("="*70)
@@ -514,9 +541,6 @@ def run_full_pipeline(
     print(f"Validation Brier Improved? {calib_results['val_improved']}")
     
     # Deterministic deployment policy:
-    # If calibration wins on fair out-of-fold comparison, refit base pipeline on 100% of X_train,
-    # then wrap in FrozenEstimator + CalibratedClassifierCV fit via CV on X_train;
-    # otherwise refit best_model on 100% of X_train.
     if calib_results['val_improved']:
         best_model.fit(X_train, y_train)
         cv_cal = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
@@ -532,11 +556,40 @@ def run_full_pipeline(
         deployed_model = best_model
         deployed_model_name = winner_name
         
-    # 9. Bootstrap 95% Confidence Intervals
+    # 9. ONE Final Evaluation of All Models on Held-Out Test Data
     print("\n" + "="*70)
-    print("STEP 8: BOOTSTRAP 95% CONFIDENCE INTERVALS (Test Set)")
+    print("STEP 8: FINAL HELD-OUT TEST EVALUATION (TOUCHED ONCE)")
     print("="*70)
+    results_df = evaluate_all_models_on_test_set(
+        fitted_models, dev_benchmark_df, X_test, y_test
+    )
+    comparison_csv_path = os.path.join(reports_dir, "results_comparison.csv")
+    results_df = results_df.sort_values(by=['CV_PR_AUC_Mean', 'CV_ROC_AUC_Mean'], ascending=[False, False]).reset_index(drop=True)
+    results_df.to_csv(comparison_csv_path, index=False)
+    print(f"\nComparative results saved to '{comparison_csv_path}':")
+    print(results_df[['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC', 'FPR', 'FPR_at_Recall_70', 'Top20_Capture_Rate', 'CV_PR_AUC_Mean']].to_string(index=False))
+    
+    # Deployed model evaluation on test set
     test_proba_deployed = deployed_model.predict_proba(X_test)[:, 1]
+    top20_capture_deployed = compute_top_k_capture(y_test, test_proba_deployed, k_percent=20.0)
+    print(f"\nTop-20% Customer Capture Rate on Held-Out Test Set: {top20_capture_deployed['capture_rate']:.4f} "
+          f"({top20_capture_deployed['responders_captured']}/{top20_capture_deployed['total_responders']} responders)")
+    
+    # 4-strategy simulation on test set
+    sim_results = run_four_strategy_simulation(
+        y_test, test_proba_deployed,
+        f1_threshold=f1_t,
+        profit_threshold=profit_t,
+        cost_per_contact=COST_PER_CONTACT,
+        profit_per_responder=PROFIT_PER_RESPONDER,
+        output_dir=figures_dir
+    )
+    sim_csv_path = os.path.join(reports_dir, "business_simulation.csv")
+    sim_results['simulation_table'].to_csv(sim_csv_path, index=False)
+    print("\nBusiness Simulation Results on Held-Out Test Data:")
+    print(sim_results['simulation_table'].to_string(index=False))
+    
+    # Bootstrap 95% Confidence Intervals
     bootstrap_cis = compute_bootstrap_ci(y_test, test_proba_deployed, threshold=profit_t, n_bootstraps=1000, random_state=random_state)
     print(f"Test ROC-AUC: 95% CI [{bootstrap_cis['roc_auc']['ci_lower']:.4f}, {bootstrap_cis['roc_auc']['ci_upper']:.4f}]")
     print(f"Test PR-AUC:  95% CI [{bootstrap_cis['pr_auc']['ci_lower']:.4f}, {bootstrap_cis['pr_auc']['ci_upper']:.4f}]")
@@ -546,7 +599,7 @@ def run_full_pipeline(
     plot_metrics_comparison(results_df, output_dir=figures_dir)
     plot_roc_curves(fitted_models, X_test, y_test, output_dir=figures_dir)
     plot_precision_recall_curves(fitted_models, X_test, y_test, output_dir=figures_dir)
-    oof_thresh_map = {name: model_cv_metrics[name]['oof_threshold'] for name in fitted_models}
+    oof_thresh_map = {row['Model']: row['OOF_Threshold'] for _, row in dev_benchmark_df.iterrows()}
     plot_confusion_matrices(fitted_models, oof_thresh_map, X_test, y_test, output_dir=figures_dir)
     plot_cumulative_gains_and_lift(deployed_model, X_test, y_test, output_dir=figures_dir)
     
@@ -593,19 +646,31 @@ def run_full_pipeline(
     test_metrics_f1 = compute_metrics_at_threshold(y_test, test_proba_deployed, threshold=f1_t)
     test_metrics_profit = compute_metrics_at_threshold(y_test, test_proba_deployed, threshold=profit_t)
     
+    cv_metrics_dict = dev_benchmark_df.set_index('Model').to_dict(orient='index')
+    for m_name in cv_metrics_dict:
+        cv_metrics_dict[m_name]['cv_pr_auc_mean'] = cv_metrics_dict[m_name]['CV_PR_AUC_Mean']
+        cv_metrics_dict[m_name]['cv_pr_auc_std'] = cv_metrics_dict[m_name]['CV_PR_AUC_Std']
+        cv_metrics_dict[m_name]['cv_roc_auc_mean'] = cv_metrics_dict[m_name]['CV_ROC_AUC_Mean']
+        cv_metrics_dict[m_name]['cv_roc_auc_std'] = cv_metrics_dict[m_name]['CV_ROC_AUC_Std']
+        cv_metrics_dict[m_name]['fpr_at_recall_70'] = cv_metrics_dict[m_name]['OOF_FPR_at_Recall_70']
+        cv_metrics_dict[m_name]['oof_threshold'] = cv_metrics_dict[m_name]['OOF_Threshold']
+        cv_metrics_dict[m_name]['oof_f1'] = cv_metrics_dict[m_name]['OOF_F1']
+        cv_metrics_dict[m_name]['best_params'] = cv_metrics_dict[m_name]['Best_Params']
+    
     metrics_summary = {
         'best_model_name': winner_name,
         'deployed_model_name': deployed_model_name,
         'selection_justification': selection_justification,
-        'best_model_params': model_cv_metrics[winner_name]['best_params'],
+        'best_model_params': best_params_winner,
         'f1_optimal_threshold': f1_t,
         'profit_optimal_threshold': profit_t,
         'default_threshold': 0.50,
+        'top_20_percent_capture': top20_capture_deployed,
         'test_metrics_default_threshold': test_metrics_default,
         'test_metrics_f1_threshold': test_metrics_f1,
         'test_metrics_profit_threshold': test_metrics_profit,
         'bootstrap_confidence_intervals_profit_threshold': bootstrap_cis,
-        'cv_metrics': model_cv_metrics,
+        'cv_metrics': cv_metrics_dict,
         'brier_scores': {
             'validation_uncalibrated': calib_results['brier_val_uncalibrated'],
             'validation_calibrated': calib_results['brier_val_calibrated'],

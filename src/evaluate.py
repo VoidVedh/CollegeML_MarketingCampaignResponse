@@ -93,6 +93,50 @@ def compute_fpr_at_recall(y_true, y_proba, target_recall: float = 0.70) -> float
     return float(fpr_arr[valid_indices[0]])
 
 
+def compute_top_k_capture(y_true, y_proba, k_percent: float = 20.0) -> Dict[str, Any]:
+    """
+    Computes the true top-k% responder capture rate:
+      1. Rank all customers descending by predicted probability.
+      2. Select the top k% of customers (by ranking, not fixed threshold).
+      3. Count actual responders inside that top k% subset.
+      4. Divide by total actual responders in the dataset.
+    
+    Formula:
+      Top-k Capture Rate = (actual responders in top k%) / (total actual responders)
+    """
+    y_true_arr = np.asarray(y_true)
+    y_proba_arr = np.asarray(y_proba)
+    n_total = len(y_true_arr)
+    total_responders = int(np.sum(y_true_arr))
+    
+    if total_responders == 0 or n_total == 0:
+        return {
+            'k_percent': float(k_percent),
+            'n_targeted': 0,
+            'responders_captured': 0,
+            'total_responders': total_responders,
+            'capture_rate': 0.0
+        }
+    
+    n_top = int(np.floor(n_total * (k_percent / 100.0)))
+    n_top = max(1, min(n_top, n_total))
+    
+    # Sort indices descending by predicted probability
+    sort_idx = np.argsort(y_proba_arr)[::-1]
+    top_idx = sort_idx[:n_top]
+    
+    responders_captured = int(np.sum(y_true_arr[top_idx]))
+    capture_rate = float(responders_captured / total_responders)
+    
+    return {
+        'k_percent': float(k_percent),
+        'n_targeted': int(n_top),
+        'responders_captured': int(responders_captured),
+        'total_responders': int(total_responders),
+        'capture_rate': float(capture_rate)
+    }
+
+
 def compute_bootstrap_ci(y_true, y_proba, threshold: float, n_bootstraps: int = 1000, random_state: int = 42) -> Dict[str, Dict[str, float]]:
     """
     Computes 95% bootstrap confidence intervals for ROC-AUC, PR-AUC, and F1 on the test set.
