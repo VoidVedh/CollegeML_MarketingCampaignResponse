@@ -447,7 +447,7 @@ A complete, production-grade machine learning system that predicts client propen
 
 ---
 
-## 📋 Executive Overview & Key Results
+## Executive Overview & Key Results
 
 | Metric / Objective | Traditional Mass Outreach | Default ML (Threshold 0.50) | F1-Optimal (Threshold {f1_t:.2f}) | Profit-Optimal (Threshold {profit_t:.2f}) [Deployed] |
 | :--- | :---: | :---: | :---: | :---: |
@@ -463,7 +463,7 @@ A complete, production-grade machine learning system that predicts client propen
 
 ---
 
-## 🏆 Model Selection & Benchmark Results
+## Model Selection & Benchmark Results
 
 ### Defensible Selection Rule
 {m['selection_justification']}
@@ -483,12 +483,12 @@ A complete, production-grade machine learning system that predicts client propen
 
 ---
 
-## ⚖️ Class Imbalance Treatments Comparison
+## Class Imbalance Treatments Comparison
 {format_imbalance_table_markdown(imb_df)}
 
 ---
 
-## 📊 Feature Mapping: Case Study 157 Concepts vs Kaggle Fields
+## Feature Mapping: Case Study 157 Concepts vs Kaggle Fields
 
 | Case Study Concept | Kaggle Equivalent Field(s) | Status | Technical Justification |
 | :--- | :--- | :---: | :--- |
@@ -503,7 +503,7 @@ A complete, production-grade machine learning system that predicts client propen
 
 ---
 
-## 🏗️ Project Architecture
+## Project Architecture
 
 ```
 CollegeML_MarketingCampaignResponse/
@@ -520,8 +520,7 @@ CollegeML_MarketingCampaignResponse/
 │   ├── train.py                     # Main orchestrator (CV, OOF thresholds, FrozenEstimator)
 │   ├── evaluate.py                  # Evaluation suite, bootstrap CIs, 4-strategy simulation
 │   ├── build_report.py              # Dynamic markdown generator sourced from metrics.json
-│   ├── build_notebook.py            # Automated notebook compilation script
-│   └── generate_data.py             # [DEPRECATED / LEGACY] Retained for historical reference
+│   └── build_notebook.py            # Automated notebook compilation script
 ├── models/
 │   ├── best_model.joblib            # Serialized Kaggle-trained model pipeline
 │   ├── preprocessor.joblib          # Standalone fitted ColumnTransformer
@@ -545,7 +544,7 @@ CollegeML_MarketingCampaignResponse/
 
 ---
 
-## ⚙️ Quickstart & Execution
+## Quickstart & Execution
 
 ### 1. Environment Setup (Python >= 3.11)
 ```bash

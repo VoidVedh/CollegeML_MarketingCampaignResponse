@@ -109,7 +109,7 @@ def verify_all_consistency():
     if mismatches:
         print(f"FAILED: Found {len(mismatches)} consistency mismatches:")
         for m_err in mismatches:
-            print(f"  ❌ {m_err}")
+            print(f"  FAIL: {m_err}")
         return False
     else:
         print("ALL AUDITED NUMBERS MATCH 100% PERFECTLY WITH METRICS.JSON!")

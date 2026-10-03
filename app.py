@@ -12,7 +12,7 @@ Features:
 - Real-time customer response prediction with interactive Kaggle parameters.
 - State persistence: prediction results remain in st.session_state across widget interactions.
 - Dynamic threshold slider with on_click callback to reset to profit-optimal threshold.
-- Color-coded decision badge ("✅ WILL RESPOND" / "❌ WILL NOT RESPOND") based on chosen threshold.
+- Color-coded decision badge ("WILL RESPOND" / "WILL NOT RESPOND") based on chosen threshold.
 - Probability gauges, unit economics loaded from metrics.json, and actionable recommendations.
 - Interactive Model Comparison tab with real performance tables and evaluation curves.
 - Feature Importance & Interpretability tab with SHAP, Odds Ratios, and Tree Importance.
@@ -41,7 +41,7 @@ from src.preprocess import (
 # Page configuration
 st.set_page_config(
     page_title="Kaggle Marketing Campaign Response Predictor",
-    page_icon="🎯",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -238,8 +238,8 @@ try:
     cost_per_contact = float(metrics_meta.get('economic_parameters', {}).get('cost_per_contact', 5.0))
     profit_per_responder = float(metrics_meta.get('economic_parameters', {}).get('profit_per_responder', 50.0))
 except Exception as e:
-    st.error(f"⚠️ **Application Initialization Error:** {e}")
-    st.info("💡 Run `python src/train.py` from the project root to generate and serialize all model artifacts.")
+    st.error(f"Application Initialization Error: {e}")
+    st.info("Run `python src/train.py` from the project root to generate and serialize all model artifacts.")
     st.stop()
 
 
@@ -260,7 +260,7 @@ def reset_to_optimal_threshold():
 # SIDEBAR
 # -------------------------------------------------------------
 with st.sidebar:
-    st.markdown("# 🎯 Campaign Analytics")
+    st.markdown("# Campaign Analytics")
     st.markdown("**Case Study 157:** Marketing Campaign Response Prediction")
     st.markdown("Automated targeting engine to optimize marketing ROI and minimize wasted ad expenditure.")
     
@@ -284,7 +284,7 @@ with st.sidebar:
         help="Adjusting threshold trades off False Positives (wasted ad touches) against False Negatives (missed subscribers)."
     )
     
-    st.button("🔄 Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold, help="Resets the operating threshold to the simulated profit-maximizing threshold.")
+    st.button("Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold, help="Resets the operating threshold to the simulated profit-maximizing threshold.")
     
     st.markdown("---")
     st.subheader("Student & Project Details")
@@ -300,23 +300,48 @@ with st.sidebar:
 # -------------------------------------------------------------
 # MAIN HEADER
 # -------------------------------------------------------------
-st.markdown('<div class="main-header">🎯 Kaggle Marketing Campaign Response Predictor</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">Kaggle Marketing Campaign Response Predictor</div>', unsafe_allow_html=True)
 st.markdown(
     '<div class="sub-header">Case Study 157 — Bank Term Deposit Subscription Prediction | '
     'Machine Learning Pipeline with Zero Call-Duration Leakage</div>',
     unsafe_allow_html=True
 )
 st.markdown(
-    '<div class="badge-author">👤 <b>Vedh Naik</b> | Cohort: <b>Jensen Huang</b> | Roll No: <b>150096725163</b></div> '
-    '<div class="badge-leakage">🛡️ <b>Target Leakage Protection:</b> Call duration is strictly excluded</div>',
+    '<div class="badge-author"><b>Vedh Naik</b> | Cohort: <b>Jensen Huang</b> | Roll No: <b>150096725163</b></div> '
+    '<div class="badge-leakage"><b>Target Leakage Protection:</b> Call duration is strictly excluded</div>',
     unsafe_allow_html=True
 )
 
+with st.expander("Case Study 157 Problem Statement & Feature Mapping", expanded=False):
+    st.markdown("""
+    ### Case Study 157: Marketing Campaign Response Prediction
+    **Objective:** Build and compare 6 classification algorithms to identify customers who are genuinely likely to respond to a campaign, minimizing marketing costs and reducing false positives.
+
+    #### Required Algorithms & Evaluation
+    - **6 Algorithms:** Logistic Regression, KNN, Decision Tree, Random Forest, Naive Bayes, Gradient Boosting.
+    - **Evaluation Metrics:** Accuracy, Precision, Recall, F1-Score, ROC-AUC, PR-AUC, Confusion Matrix, and False-Positive Rate ($FPR = \\frac{FP}{FP + TN}$).
+    - **Prediction Output:** `Will Respond` / `Will Not Respond`
+
+    #### College Case Study vs. Kaggle Marketing Dataset Feature Mapping
+    The college case study description lists 8 conceptual inputs. The authentic Kaggle dataset provides genuine customer, contact, and economic variables without fabricating synthetic fields:
+
+    | Case Study Concept | Kaggle Equivalent Field | Status / Implementation |
+    | :--- | :--- | :--- |
+    | **Age group** | Derived from `age` (`18-25`, `26-35`, `36-45`, `46-55`, `56+`) | Fully mapped & reproducible |
+    | **Previous campaign response** | `poutcome` (`success`, `failure`, `nonexistent`), `previous`, `pdays` | Fully mapped |
+    | **Income** | Not in Kaggle dataset (macroeconomic proxy: `emp.var.rate`, `euribor3m`) | Defensible economic proxy |
+    | **Previous purchases** | Not applicable (Banking term deposit subscription) | Not available |
+    | **Purchase frequency** | Not applicable (Direct banking campaign) | Not available |
+    | **Website visits** | Not applicable (Direct telemarketing campaign) | Not available |
+    | **Email engagement** | Not applicable (Direct telephone / cellular campaign) | Not available |
+    | **Discount usage** | Not applicable (Deposit interest rate yield product) | Not available |
+    """)
+
 tab_single, tab_benchmark, tab_importance, tab_batch = st.tabs([
-    "🎯 Single Client Prediction",
-    "📊 Algorithm Benchmark & Comparison",
-    "🔍 Feature Importance & Insights",
-    "📁 Batch CSV Prediction"
+    "Single Client Prediction",
+    "Algorithm Benchmark & Comparison",
+    "Feature Importance & Insights",
+    "Batch CSV Prediction"
 ])
 
 
@@ -327,7 +352,7 @@ with tab_single:
     st.markdown("### Client Profile & Campaign Context")
     st.markdown("Enter client demographic, contact campaign, and macroeconomic indicators to generate a real-time propensity score and commercial recommendation.")
     
-    with st.expander("👤 1. Client Demographics & Financial Status", expanded=True):
+    with st.expander("1. Client Demographics & Financial Status", expanded=True):
         d_col1, d_col2, d_col3 = st.columns(3)
         with d_col1:
             age = st.slider("Client Age (years)", min_value=18, max_value=95, value=35, step=1, help="Age in years. Used to derive standard age groups.")
@@ -340,7 +365,7 @@ with tab_single:
             housing = st.selectbox("Housing Loan", options=VALID_CATEGORIES["housing"], index=0, help="Has housing loan?")
             loan = st.selectbox("Personal Loan", options=VALID_CATEGORIES["loan"], index=0, help="Has personal loan?")
 
-    with st.expander("📞 2. Campaign & Contact Interaction History", expanded=True):
+    with st.expander("2. Campaign & Contact Interaction History", expanded=True):
         c_col1, c_col2, c_col3 = st.columns(3)
         with c_col1:
             contact = st.selectbox("Contact Communication Channel", options=VALID_CATEGORIES["contact"], index=0)
@@ -353,7 +378,7 @@ with tab_single:
             pdays = st.number_input("Days Since Previous Contact (pdays)", min_value=0, max_value=999, value=999, step=1, help="999 means client was not previously contacted.")
             poutcome = st.selectbox("Previous Campaign Outcome", options=VALID_CATEGORIES["poutcome"], index=0, help="Outcome of the previous marketing campaign.")
 
-    with st.expander("📈 3. Macroeconomic Climate Indicators", expanded=True):
+    with st.expander("3. Macroeconomic Climate Indicators", expanded=True):
         m_col1, m_col2, m_col3 = st.columns(3)
         with m_col1:
             emp_var_rate = st.number_input("Employment Variation Rate (emp.var.rate)", min_value=-3.4, max_value=1.4, value=1.1, step=0.1, format="%.2f", help="Quarterly economic indicator.")
@@ -365,8 +390,8 @@ with tab_single:
             nr_employed = st.number_input("Number of Employees (nr.employed)", min_value=4900.0, max_value=5300.0, value=5191.0, step=1.0, format="%.1f", help="Quarterly employee benchmark count in thousands.")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    predict_btn = st.button("🚀 Predict Term Deposit Subscription", type="primary")
-    
+    predict_btn = st.button("Predict Term Deposit Subscription", type="primary")
+
     if predict_btn:
         # Automatically derive age_group from age
         age_group_val = derive_age_group(pd.Series([age])).iloc[0]
@@ -430,16 +455,16 @@ with tab_single:
         exp_val = proba * profit_per_responder - cost_per_contact
         
         st.markdown("---")
-        st.subheader("🎯 Prediction Result & Commercial Recommendation")
+        st.subheader("Prediction Result & Commercial Recommendation")
         
         res_col1, res_col2 = st.columns([1, 2])
         
         with res_col1:
             st.markdown("#### Outcome Classification")
             if pred_class == 1:
-                st.markdown('<div class="badge-respond">✅ WILL RESPOND</div>', unsafe_allow_html=True)
+                st.markdown('<div class="badge-respond">WILL RESPOND</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="badge-no-respond">❌ WILL NOT RESPOND</div>', unsafe_allow_html=True)
+                st.markdown('<div class="badge-no-respond">WILL NOT RESPOND</div>', unsafe_allow_html=True)
                 
             st.markdown(f"**Predicted Subscription Probability:** `{proba*100:.2f}%`")
             st.caption(f"Operating Threshold: **{selected_threshold:.2f}** | Theoretical Break-Even: **{break_even_p*100:.1f}%**")
@@ -468,12 +493,12 @@ with tab_single:
                         "Under portfolio targeting, capturing this volume maximizes overall campaign profit."
                     )
                 recommendation = (
-                    f"🌟 **Target Client:** Propensity ({proba*100:.1f}%) meets or exceeds the operating threshold ({selected_threshold:.2f}). "
+                    f"**Target Client:** Propensity ({proba*100:.1f}%) meets or exceeds the operating threshold ({selected_threshold:.2f}). "
                     f"{econ_statement} Prioritize outreach with tailored term deposit product offerings."
                 )
             else:
                 recommendation = (
-                    f"🛑 **Suppress Contact:** Predicted probability ({proba*100:.1f}%) falls below operating threshold ({selected_threshold:.2f}). "
+                    f"**Suppress Contact:** Predicted probability ({proba*100:.1f}%) falls below operating threshold ({selected_threshold:.2f}). "
                     f"Expected net return is negative (${exp_val:+.2f}). "
                     "Suppress direct telemarketing contact to conserve budget and prevent client fatigue."
                 )
@@ -606,7 +631,7 @@ with tab_batch:
         }
     ])
     st.download_button(
-        label="📥 Download Sample CSV Template",
+        label="Download Sample CSV Template",
         data=sample_data.to_csv(index=False),
         file_name="sample_kaggle_campaign_input.csv",
         mime="text/csv"
@@ -635,11 +660,11 @@ with tab_batch:
             is_valid, warnings_or_errors, df_clean = validate_schema(df_upload)
             
             if not is_valid:
-                st.error("⚠️ Schema Validation Failed:\n- " + "\n- ".join(warnings_or_errors))
+                st.error("Schema Validation Failed:\n- " + "\n- ".join(warnings_or_errors))
                 st.stop()
                 
             if warnings_or_errors:
-                st.info("ℹ️ Processing Notes:\n- " + "\n- ".join(warnings_or_errors))
+                st.info("Processing Notes:\n- " + "\n- ".join(warnings_or_errors))
             
             # Predict
             probas = best_model.predict_proba(df_clean[FEATURE_COLUMNS])[:, 1]
@@ -650,7 +675,7 @@ with tab_batch:
             df_result['predicted_subscribe'] = preds
             df_result['decision'] = np.where(preds == 1, 'Target Client (Will Respond)', 'Suppress / Do Not Contact')
             
-            st.success(f"✅ Batch scoring completed successfully using decision threshold {selected_threshold:.2f}!")
+            st.success(f"Batch scoring completed successfully using decision threshold {selected_threshold:.2f}!")
             
             n_target = int(preds.sum())
             pct_target = (n_target / len(preds)) * 100 if len(preds) > 0 else 0
@@ -667,7 +692,7 @@ with tab_batch:
             
             csv_export = df_result.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download Scored CSV with Predictions",
+                label="Download Scored CSV with Predictions",
                 data=csv_export,
                 file_name="kaggle_scored_predictions.csv",
                 mime="text/csv"

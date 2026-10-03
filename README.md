@@ -19,7 +19,7 @@ A complete, production-grade machine learning system that predicts client propen
 
 ---
 
-## 📋 Executive Overview & Key Results
+## Executive Overview & Key Results
 
 | Metric / Objective | Traditional Mass Outreach | Default ML (Threshold 0.50) | F1-Optimal (Threshold 0.22) | Profit-Optimal (Threshold 0.11) [Deployed] |
 | :--- | :---: | :---: | :---: | :---: |
@@ -35,7 +35,7 @@ A complete, production-grade machine learning system that predicts client propen
 
 ---
 
-## 🏆 Model Selection & Benchmark Results
+## Model Selection & Benchmark Results
 
 ### Defensible Selection Rule
 The top two models on development cross-validation, Random Forest (CV PR-AUC: 0.4646 ± 0.0110) and Gradient Boosting (CV PR-AUC: 0.4626 ± 0.0112), are practically close, with a score difference (0.0020) smaller than the observed fold-to-fold cross-validation variation (0.0110). Based strictly on training data cross-validation and out-of-fold metrics, Random Forest was selected because Random Forest demonstrated lower training out-of-fold FPR at 70% recall (0.2316 vs 0.2438). Additionally, Random Forest offers lower architectural complexity, closed-form linear coefficients, and direct interpretability.
@@ -62,7 +62,7 @@ The top two models on development cross-validation, Random Forest (CV PR-AUC: 0.
 
 ---
 
-## ⚖️ Class Imbalance Treatments Comparison
+## Class Imbalance Treatments Comparison
 | Imbalance Treatment | 5-Fold CV PR-AUC (Mean ± Std) | 5-Fold CV ROC-AUC (Mean ± Std) | Test PR-AUC | Test ROC-AUC | Test F1 (at 0.50) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **None (Unweighted Baseline)** | 0.4646 ± 0.0110 | 0.7949 ± 0.0028 | 0.4871 | 0.8096 | 0.3528 |
@@ -71,7 +71,7 @@ The top two models on development cross-validation, Random Forest (CV PR-AUC: 0.
 
 ---
 
-## 📊 Feature Mapping: Case Study 157 Concepts vs Kaggle Fields
+## Feature Mapping: Case Study 157 Concepts vs Kaggle Fields
 
 | Case Study Concept | Kaggle Equivalent Field(s) | Status | Technical Justification |
 | :--- | :--- | :---: | :--- |
@@ -86,7 +86,7 @@ The top two models on development cross-validation, Random Forest (CV PR-AUC: 0.
 
 ---
 
-## 🏗️ Project Architecture
+## Project Architecture
 
 ```
 CollegeML_MarketingCampaignResponse/
@@ -103,8 +103,7 @@ CollegeML_MarketingCampaignResponse/
 │   ├── train.py                     # Main orchestrator (CV, OOF thresholds, FrozenEstimator)
 │   ├── evaluate.py                  # Evaluation suite, bootstrap CIs, 4-strategy simulation
 │   ├── build_report.py              # Dynamic markdown generator sourced from metrics.json
-│   ├── build_notebook.py            # Automated notebook compilation script
-│   └── generate_data.py             # [DEPRECATED / LEGACY] Retained for historical reference
+│   └── build_notebook.py            # Automated notebook compilation script
 ├── models/
 │   ├── best_model.joblib            # Serialized Kaggle-trained model pipeline
 │   ├── preprocessor.joblib          # Standalone fitted ColumnTransformer
@@ -128,7 +127,7 @@ CollegeML_MarketingCampaignResponse/
 
 ---
 
-## ⚙️ Quickstart & Execution
+## Quickstart & Execution
 
 ### 1. Environment Setup (Python >= 3.11)
 ```bash
