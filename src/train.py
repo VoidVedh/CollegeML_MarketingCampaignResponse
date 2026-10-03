@@ -1,8 +1,10 @@
 """
 train.py
-Main execution and training pipeline for Marketing Campaign Response Prediction.
+Main execution and training pipeline for Case Study 157:
+Marketing Campaign Response Prediction Using Machine Learning.
+
 Implements:
-- Leakage-free preprocessing with scikit-learn ColumnTransformer
+- Leakage-free preprocessing with scikit-learn ColumnTransformer on 8 Case Study features
 - 5-fold Stratified Cross-Validation across all 6 classification algorithms
 - Defensible model selection by CV PR-AUC & ROC-AUC with standard deviation & tie-breaks
 - FPR at fixed recall (70%) benchmark
@@ -11,7 +13,7 @@ Implements:
 - 4-Strategy business simulation (Everyone, Default 0.50, F1-optimal, Profit-optimal)
 - Probability calibration via FrozenEstimator with validation Brier check
 - Bootstrap 95% Confidence Intervals for test metrics
-- Explainability (Tree MDI, Permutation Importance, Odds Ratios, SHAP)
+- Explainability (Tree MDI, Permutation Importance, Logistic Odds Ratios, SHAP)
 - Profiling for both ACTUAL and PREDICTED responders
 - Automated report generation via build_report.py
 """
@@ -47,7 +49,7 @@ from imblearn.over_sampling import SMOTENC
 # Local imports
 from src.preprocess import (
     load_and_split_data, create_preprocessor, get_feature_names,
-    unit_test_preprocessing, DEFAULT_DATA_PATH,
+    unit_test_preprocessing, RAW_DATA_PATH, PROCESSED_DATA_PATH,
     NUMERIC_FEATURES, CATEGORICAL_FEATURES, FEATURE_COLUMNS, TARGET_COLUMN
 )
 from src.eda import run_full_eda
@@ -63,7 +65,7 @@ from src.evaluate import (
 
 def get_model_grid_configs(random_state: int = 42) -> Dict[str, Dict[str, Any]]:
     """
-    Returns estimator templates and focused hyperparameter grids for all 6 models.
+    Returns estimator templates and focused hyperparameter grids for all 6 required models.
     """
     return {
         'Logistic Regression': {
@@ -85,7 +87,7 @@ def get_model_grid_configs(random_state: int = 42) -> Dict[str, Dict[str, Any]]:
         'Decision Tree': {
             'estimator': DecisionTreeClassifier(random_state=random_state),
             'param_grid': {
-                'classifier__max_depth': [3, 5, 8, 12],
+                'classifier__max_depth': [3, 5, 8],
                 'classifier__min_samples_split': [2, 5, 10],
                 'classifier__criterion': ['gini', 'entropy']
             },
@@ -95,7 +97,7 @@ def get_model_grid_configs(random_state: int = 42) -> Dict[str, Dict[str, Any]]:
             'estimator': RandomForestClassifier(random_state=random_state),
             'param_grid': {
                 'classifier__n_estimators': [50, 100, 150],
-                'classifier__max_depth': [5, 8, 12, None],
+                'classifier__max_depth': [4, 6, 8, None],
                 'classifier__min_samples_split': [2, 5]
             },
             'supports_class_weight': True
@@ -128,12 +130,6 @@ def train_and_tune_models_dev(
     """
     Trains and tunes all 6 models using 5-fold Stratified Cross-Validation strictly on
     the development/training dataset. ZERO test-set data is used or touched.
-    
-    Returns:
-        fitted_models: Dict of best refitted estimators
-        dev_benchmark_df: DataFrame summarizing CV PR-AUC, CV ROC-AUC, OOF PR-AUC, OOF F1,
-                          OOF FPR@Recall=70%, and best hyperparameters.
-        oof_probas: Dict mapping model name to Out-Of-Fold predicted probabilities on X_train.
     """
     configs = get_model_grid_configs(random_state=random_state)
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
@@ -224,7 +220,7 @@ def select_best_model_defensibly(dev_benchmark_df: pd.DataFrame) -> Tuple[str, s
        - Disclose that the difference is small relative to cross-validation fold variation.
        - Break tie using development/training information:
          (a) Lower training Out-Of-Fold FPR at fixed 70% recall (OOF_FPR_at_Recall_70)
-         (b) Model parsimony / architectural simplicity / direct linear interpretability
+         (b) Model parsimony / architectural simplicity / explainability
     4. If not practically close (diff >= std):
        - Select the top model decisively.
     
@@ -252,18 +248,32 @@ def select_best_model_defensibly(dev_benchmark_df: pd.DataFrame) -> Tuple[str, s
                 f"({top2['OOF_FPR_at_Recall_70']:.4f} vs {top1['OOF_FPR_at_Recall_70']:.4f})."
             )
             
+        if winner == 'Logistic Regression':
+            arch_note = "Additionally, Logistic Regression offers convex optimization, closed-form log-odds interpretability, and direct odds ratios."
+        elif winner in ['Random Forest', 'Gradient Boosting', 'Decision Tree']:
+            arch_note = f"Additionally, {winner} captures non-linear feature interactions and provides robust tree-based and permutation feature importances without parametric distribution assumptions."
+        else:
+            arch_note = f"Additionally, {winner} demonstrates solid non-parametric boundary separation."
+
         justification = (
             f"The top two models on development cross-validation, {top1['Model']} (CV PR-AUC: {top1['CV_PR_AUC_Mean']:.4f} ± {top1['CV_PR_AUC_Std']:.4f}) "
             f"and {top2['Model']} (CV PR-AUC: {top2['CV_PR_AUC_Mean']:.4f} ± {top2['CV_PR_AUC_Std']:.4f}), are practically close, with a score difference "
             f"({cv_diff:.4f}) smaller than the observed fold-to-fold cross-validation variation ({top1_std:.4f}). "
             f"Based strictly on training data cross-validation and out-of-fold metrics, {winner} was selected because {tie_reason} "
-            f"Additionally, {winner} offers lower architectural complexity, closed-form linear coefficients, and direct interpretability."
+            f"{arch_note}"
         )
     else:
         winner = top1['Model']
+        if winner == 'Logistic Regression':
+            arch_note = "Logistic Regression provides convex optimization, closed-form log-odds interpretability, and direct odds ratios."
+        elif winner in ['Random Forest', 'Gradient Boosting', 'Decision Tree']:
+            arch_note = f"{winner} effectively captures non-linear feature interactions with tree-based and permutation importance."
+        else:
+            arch_note = f"{winner} provides robust predictive capability."
+            
         justification = (
             f"{top1['Model']} achieved the highest mean CV PR-AUC ({top1['CV_PR_AUC_Mean']:.4f} ± {top1['CV_PR_AUC_Std']:.4f}), "
-            f"leading the runner-up {top2['Model']} ({top2['CV_PR_AUC_Mean']:.4f}) by more than 1 cross-validation standard deviation."
+            f"leading the runner-up {top2['Model']} ({top2['CV_PR_AUC_Mean']:.4f}) by more than 1 cross-validation standard deviation. {arch_note}"
         )
         
     return winner, justification
@@ -276,65 +286,63 @@ def evaluate_all_models_on_test_set(
     y_test: pd.Series
 ) -> pd.DataFrame:
     """
-    Evaluates all 6 trained models on the held-out test set for final reporting.
-    This function is executed ONLY ONCE, strictly AFTER model selection and threshold selection
-    have already concluded using training data.
+    Evaluates each fitted model pipeline ONCE on the held-out test set.
     """
-    test_results_list = []
+    rows = []
     
     for _, dev_row in dev_benchmark_df.iterrows():
         name = dev_row['Model']
         model = fitted_models[name]
+        
+        y_proba = model.predict_proba(X_test)[:, 1]
+        
+        # Test evaluation at default threshold 0.50
+        metrics_default = compute_metrics_at_threshold(y_test, y_proba, threshold=0.50)
+        
+        # Test evaluation at model's own OOF tuned threshold
         oof_t = dev_row['OOF_Threshold']
+        metrics_tuned = compute_metrics_at_threshold(y_test, y_proba, threshold=oof_t)
         
-        test_proba = model.predict_proba(X_test)[:, 1]
+        # Test FPR at fixed 70% recall
+        fpr_70_test = compute_fpr_at_recall(y_test, y_proba, target_recall=0.70)
         
-        # Standard threshold 0.50 evaluation (required by project rubric)
-        m_def = compute_metrics_at_threshold(y_test, test_proba, threshold=0.50)
+        # Top-20% customer capture rate
+        top20_capture = compute_top_k_capture(y_test, y_proba, k_percent=20.0)
         
-        # Tuned threshold evaluation (tuned on training OOF)
-        m_tuned = compute_metrics_at_threshold(y_test, test_proba, threshold=oof_t)
-        
-        # Test set FPR at 70% recall (for benchmark table)
-        fpr_70_test = compute_fpr_at_recall(y_test, test_proba, target_recall=0.70)
-        
-        # True top-20% customer capture rate
-        top20_res = compute_top_k_capture(y_test, test_proba, k_percent=20.0)
-        
-        test_results_list.append({
+        rows.append({
             'Model': name,
-            'Accuracy': m_def['accuracy'],
-            'Precision': m_def['precision'],
-            'Recall': m_def['recall'],
-            'F1-Score': m_def['f1'],
-            'ROC-AUC': m_def['roc_auc'],
-            'PR-AUC': m_def['pr_auc'],
-            'FPR': m_def['fpr'],
-            'TN': m_def['tn'],
-            'FP': m_def['fp'],
-            'FN': m_def['fn'],
-            'TP': m_def['tp'],
-            'Tuned_Threshold': oof_t,
-            'Tuned_F1': m_tuned['f1'],
-            'Tuned_Precision': m_tuned['precision'],
-            'Tuned_Recall': m_tuned['recall'],
-            'Tuned_FPR': m_tuned['fpr'],
+            'Accuracy': metrics_default['accuracy'],
+            'Precision': metrics_default['precision'],
+            'Recall': metrics_default['recall'],
+            'F1-Score': metrics_default['f1'],
+            'ROC-AUC': metrics_default['roc_auc'],
+            'PR-AUC': metrics_default['pr_auc'],
+            'Confusion_Matrix_TN': metrics_default['tn'],
+            'Confusion_Matrix_FP': metrics_default['fp'],
+            'Confusion_Matrix_FN': metrics_default['fn'],
+            'Confusion_Matrix_TP': metrics_default['tp'],
+            'FPR': metrics_default['fpr'],
             'FPR_at_Recall_70': fpr_70_test,
-            'Top20_Capture_Rate': top20_res['capture_rate'],
-            'Top20_Responders_Captured': top20_res['responders_captured'],
+            'Top20_Capture_Rate': top20_capture['capture_rate'],
+            'Top20_Responders_Captured': top20_capture['responders_captured'],
+            'Top20_Total_Responders': top20_capture['total_responders'],
+            'Tuned_Threshold': oof_t,
+            'Tuned_Threshold_Precision': metrics_tuned['precision'],
+            'Tuned_Threshold_Recall': metrics_tuned['recall'],
+            'Tuned_Threshold_F1': metrics_tuned['f1'],
             'CV_PR_AUC_Mean': dev_row['CV_PR_AUC_Mean'],
             'CV_PR_AUC_Std': dev_row['CV_PR_AUC_Std'],
             'CV_ROC_AUC_Mean': dev_row['CV_ROC_AUC_Mean'],
             'CV_ROC_AUC_Std': dev_row['CV_ROC_AUC_Std'],
             'OOF_FPR_at_Recall_70': dev_row['OOF_FPR_at_Recall_70'],
-            'Best_Params': json.dumps(dev_row['Best_Params'])
+            'Best_Params': str(dev_row['Best_Params'])
         })
         
-    return pd.DataFrame(test_results_list)
+    return pd.DataFrame(rows)
 
 
 def evaluate_imbalance_treatments(
-    best_model_name: str,
+    winner_name: str,
     base_estimator,
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -344,16 +352,15 @@ def evaluate_imbalance_treatments(
     random_state: int = 42
 ) -> pd.DataFrame:
     """
-    Evaluates 3 class imbalance treatments for the champion model:
-      1. None (standard unweighted baseline)
-      2. class_weight='balanced' (if supported by estimator)
+    Benchmarks three class imbalance treatments:
+      1. None (Unweighted Baseline)
+      2. class_weight='balanced' (if supported)
       3. SMOTENC (with categorical columns declared properly)
     """
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
     treatments = []
     
     # Dynamically derive categorical indices from fitted preprocessor:
-    # All OneHotEncoder columns follow the numerical columns
     preproc_fitted = create_preprocessor().fit(X_train)
     all_feat_names = list(preproc_fitted.get_feature_names_out())
     n_num = len(NUMERIC_FEATURES)
@@ -404,7 +411,6 @@ def evaluate_imbalance_treatments(
             'Test_F1_at_0.50': float(f1_score(y_test, (p_cw >= 0.50).astype(int), zero_division=0))
         })
     else:
-        # For tree/boosting models without class_weight parameter
         treatments.append({
             'Treatment': "class_weight='balanced' (Not supported for estimator)",
             'CV_PR_AUC_Mean': np.nan,
@@ -442,7 +448,8 @@ def evaluate_imbalance_treatments(
 
 
 def run_full_pipeline(
-    data_path: str = DEFAULT_DATA_PATH,
+    raw_path: str = RAW_DATA_PATH,
+    processed_path: str = PROCESSED_DATA_PATH,
     models_dir: str = "models",
     reports_dir: str = "reports",
     random_state: int = 42
@@ -450,7 +457,7 @@ def run_full_pipeline(
     """
     End-to-end execution of data loading, EDA, training, tuning,
     evaluation, simulation, explainability, profiling, and report building
-    on the Kaggle Marketing Dataset.
+    on the Kaggle Customer Personality Analysis Dataset.
     """
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(reports_dir, exist_ok=True)
@@ -461,19 +468,22 @@ def run_full_pipeline(
     print("\n" + "="*70)
     print("STEP 1: DATA VERIFICATION & UNIT TESTS")
     print("="*70)
-    if not os.path.exists(data_path):
-        raise FileNotFoundError(f"Kaggle dataset not found at {data_path}. Please place train.csv in data/kaggle/.")
     unit_test_preprocessing()
     
     # 2. Exploratory Data Analysis
     print("\n" + "="*70)
     print("STEP 2: EXPLORATORY DATA ANALYSIS (EDA)")
     print("="*70)
-    eda_results = run_full_eda(data_path=data_path, output_dir=figures_dir)
+    eda_results = run_full_eda(processed_path=processed_path, output_dir=figures_dir)
     print(f"Target prevalence: {eda_results['target_balance_pct']:.2f}% responders")
     
     # 3. Stratified Train / Test Partitioning
-    X_train, X_test, y_train, y_test = load_and_split_data(data_path, test_size=0.2, random_state=random_state)
+    X_train, X_test, y_train, y_test, full_df = load_and_split_data(
+        raw_path=raw_path,
+        processed_path=processed_path,
+        test_size=0.20,
+        random_state=random_state
+    )
     preprocessor = create_preprocessor()
     preprocessor.fit(X_train)
     feature_names = get_feature_names(preprocessor)
@@ -501,7 +511,9 @@ def run_full_pipeline(
     clean_params = {k.replace('classifier__', ''): v for k, v in best_params_winner.items()}
     base_est.set_params(**clean_params)
     
-    imbalance_df = evaluate_imbalance_treatments(winner_name, base_est, X_train, y_train, X_test, y_test, cv_folds=5, random_state=random_state)
+    imbalance_df = evaluate_imbalance_treatments(
+        winner_name, base_est, X_train, y_train, X_test, y_test, cv_folds=5, random_state=random_state
+    )
     imbalance_csv_path = os.path.join(reports_dir, "imbalance_handling_comparison.csv")
     imbalance_df.to_csv(imbalance_csv_path, index=False)
     print(imbalance_df.to_string(index=False))
@@ -601,7 +613,7 @@ def run_full_pipeline(
     print("\n" + "="*70)
     print("STEP 9: EXPLAINABILITY & PROFILING")
     print("="*70)
-    tree_model = fitted_models['Gradient Boosting'] if 'Gradient Boosting' in fitted_models else fitted_models['Random Forest']
+    tree_model = fitted_models['Random Forest'] if 'Random Forest' in fitted_models else fitted_models['Gradient Boosting']
     lr_model = fitted_models['Logistic Regression']
     analyze_feature_importances(tree_model, lr_model, X_test, y_test, feature_names=feature_names, output_dir=figures_dir)
     
@@ -690,15 +702,6 @@ def run_full_pipeline(
     print(f"Saved preprocessor:   {preprocessor_path}")
     print(f"Saved feature list:   {feature_list_path}")
     print(f"Saved metrics json:   {metrics_json_path}")
-    
-    # 13. Dynamic Report Generation
-    print("\n" + "="*70)
-    print("STEP 11: REGENERATING REPORTS DYNAMICALLY FROM METRICS")
-    print("="*70)
-    from src.build_report import generate_final_report, generate_readme
-    generate_final_report()
-    generate_readme()
-    print("Reports regenerated successfully.")
     
     return metrics_summary
 

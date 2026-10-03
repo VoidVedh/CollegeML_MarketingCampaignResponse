@@ -1,235 +1,213 @@
-# Viva Voce Comprehensive Preparation Guide
+# Comprehensive Viva Voce Defense Guide
 ## Case Study 157: Marketing Campaign Response Prediction Using Machine Learning
 
-**Student Details:**
-- **Name:** Vedh Naik
-- **Roll Number:** 150096725163
-- **Cohort:** Jensen Huang
-- **Semester:** B.Tech CSE Semester V (Machine Learning)
-- **Repository:** `https://github.com/VoidVedh/CollegeML_MarketingCampaignResponse`
+**Student:** Vedh Naik  
+**Roll No.:** 150096725163  
+**Cohort:** Jensen Huang  
+**Project Repository:** `VoidVedh/CollegeML_MarketingCampaignResponse`  
+**Dataset Source:** [Kaggle Customer Personality Analysis (`marketing_campaign.csv`)](https://www.kaggle.com/datasets/imakash3011/customer-personality-analysis)  
 
 ---
 
-## 1. Thirty-Second Elevator Pitch
-
-> *"Good morning, Professors. My project is Case Study 157: Marketing Campaign Response Prediction Using Machine Learning. Direct telemarketing campaigns are cost-intensive, and mass outreach typically results in wasted ad spend because only a small fraction of clients subscribe. 
-> 
-> Using the real Kaggle Bank Marketing Dataset of 41,188 clients, I engineered a leakage-free machine learning pipeline where call duration was strictly excluded to ensure realistic pre-call deployment. I implemented and tuned all six required algorithms using 5-fold Stratified Cross-Validation. 
-> 
-> Random Forest emerged as the champion model with a cross-validation PR-AUC of 0.4646 and test ROC-AUC of 0.8096. By tuning the operating decision threshold to 0.11 based on unit economics ($5 contact cost vs $50 conversion value), the model saves 81.1% in unnecessary marketing expenditure while capturing 66.4% of all subscribers within the top 20% of outreach. I deployed the solution as an interactive Streamlit web application supporting real-time single and batch CSV predictions."*
+## 1. 30-Second Elevator Pitch
+> *"My project predicts customer response to marketing campaigns using the public Kaggle Customer Personality Analysis dataset of 2,240 customer records. Under severe 85.1% negative class imbalance, standard accuracy is misleading, so I benchmarked six machine learning algorithms evaluated on Precision-Recall AUC (PR-AUC) and False Positive Rate (FPR). To satisfy the Case Study 157 requirements without fabricating data, I engineered the eight required deployment variables directly from real demographic, transaction, and campaign history records, while strictly isolating the current campaign response to prevent target leakage. Random Forest emerged as the winning model (5-fold CV PR-AUC: 0.5109, Test ROC-AUC: 0.8171, Top-20% Customer Capture Rate: 61.19%). Finally, rather than relying on an arbitrary 0.50 cutoff, I optimized decision thresholds on training out-of-fold data to identify the profit-optimal threshold of tau = 0.13, which maximizes net campaign profit at $1,705.00 on the held-out test cohort—delivering a 245.3% ROI and saving 69.0% in wasted marketing expenditure compared to untargeted mass outreach."*
 
 ---
 
-## 2. Problem Statement & Academic Objectives
+## 2. Core Academic & Technical Specifications
 
-### What is the core business problem?
-Marketing outreach costs money ($5 per call). In our dataset, only **11.27%** of customers actually subscribe to a bank term deposit. Calling everyone (mass outreach) wastes 88.73% of the marketing budget on uninterested clients and causes brand fatigue. Machine learning allows us to rank customers by subscription propensity and contact only those likely to convert.
-
-### What are the five syllabus objectives?
-1. Analyze previous campaign interaction patterns.
-2. Identify client demographics and macroeconomic context associated with campaign success.
-3. Build and preprocess a binary classification pipeline.
-4. Systematically benchmark the six mandatory algorithms.
-5. Develop and deploy an interactive Streamlit prediction application.
-
----
-
-## 3. Dataset Architecture & Key Statistics
-
-| Parameter | Exact Value | Explanation |
+| Parameter | Project Specification | Technical Justification |
 | :--- | :--- | :--- |
-| **Dataset Source** | Kaggle / UCI Bank Marketing | `bank-additional-full` benchmark dataset |
-| **Total Records** | **41,188** rows | Genuine client interactions |
-| **Raw Features** | **20 predictive features** | 9 numerical + 11 categorical |
-| **Target Variable** | `y` | Binary: `'yes'` (1) vs `'no'` (0) |
-| **Class Distribution** | `no`: 36,548 (88.73%)<br>`yes`: 4,640 (11.27%) | Severe class imbalance (~8:1 ratio) |
-| **Train/Test Split** | **80% Train** (32,950 rows)<br>**20% Held-Out Test** (8,238 rows) | Stratified on target `y`; test set touched strictly once |
+| **Case Study** | Case Study 157 | Official Semester V Machine Learning Curriculum |
+| **Project Title** | Marketing Campaign Response Prediction Using Machine Learning | Official Assignment Problem Statement Title |
+| **Dataset Source** | Kaggle Customer Personality Analysis (`marketing_campaign.csv`) | Real customer marketing attributes (income, purchases, web visits, discounts, prior campaigns) |
+| **Total Cohort Size** | 2,240 records across 29 raw columns | 100% authentic Kaggle empirical customer data |
+| **Target Variable** | `Response` (0 = Will Not Respond, 1 = Will Respond) | Binary classification of promotional conversion |
+| **Class Distribution** | 1,906 negative (85.09%) vs. 334 positive (14.91%) | Severe class imbalance (~5.7:1 ratio) |
+| **Data Partitioning** | 80% Stratified Training (1,792) / 20% Held-Out Test (448) | Test set untouched until final validation |
+| **Cross-Validation** | 5-Fold Stratified K-Fold on Training Set only | Preserves class balance across all training folds |
+| **Primary Metric** | PR-AUC (Average Precision) | Appropriate metric under severe class imbalance |
+| **Winning Algorithm** | Random Forest (`n_estimators=50`, `max_depth=8`, `min_split=2`) | Highest CV PR-AUC (0.5109), lowest OOF FPR@Rec=70% (0.1921) |
+| **Deployed Threshold** | $\tau = 0.13$ (Profit-Optimal) | Maximizes campaign net profit under contact economics |
 
 ---
 
-## 4. The Data Leakage Question (Most Crucial Viva Defense!)
+## 3. The Five Core Defenses for the Examiner
 
-### Question: "Why did you exclude `duration` from the model?"
-**Answer:**
-> *"Call duration is recorded in seconds during or after a phone conversation takes place. When deciding which customers to target before dialing the phone, call duration is unknown. If duration is included in training, the model achieves an artificially inflated ROC-AUC (>0.93) because longer calls naturally correlate with successful conversions. In a real-world deployment, duration is zero before dialing, causing the model to collapse. Removing `duration` is mandatory to guarantee zero data leakage and ensure a genuinely useful pre-contact decision support system."*
-
----
-
-## 5. College Prompt Inputs vs. Kaggle Features (Honesty Defense)
-
-### Question: "The college problem statement mentions Income, Website Visits, and Discount Usage. Why are they not in your inputs?"
-**Answer:**
-> *"The college assignment prompt lists eight conceptual marketing variables as illustrative examples. However, the authentic Kaggle Bank Marketing dataset is an empirical telemarketing study for bank term deposits and does not record website clicks, discount codes, or customer personal income. 
-> 
-> Rather than fabricating fake synthetic numbers or renaming unrelated fields, I adopted a transparent academic approach:
-> - `Age group` was mathematically derived from genuine continuous `age` into standard brackets (18-25, 26-35, 36-45, 46-55, 56+).
-> - `Previous campaign response` was mapped to `poutcome` (success/failure/nonexistent), `previous`, and `pdays`.
-> - Macroeconomic indicators (`euribor3m`, `emp.var.rate`, `cons.price.idx`) serve as realistic economic proxies.
-> - Unavailable fields are documented with full transparency in the project report, README, and Streamlit interface."*
+### Defense 1: Zero Target Leakage Protocol
+- **Examiner's Question:** *"How did you ensure that your features do not leak information about the target variable?"*
+- **Textbook Defense:**
+  > *"Target leakage occurs when an input feature includes information that is only available after or as a direct consequence of the target event. In our dataset, the target is `Response`, representing customer acceptance of the current campaign. The dataset also includes earlier campaign fields (`AcceptedCmp1` through `AcceptedCmp5`). When constructing `previous_campaign_response` and `email_engagement`, I strictly aggregated only campaigns 1 to 5 and excluded the current `Response` field. Furthermore, all customer tenure calculations use a fixed historical observation reference date (2014-12-31). Finally, our preprocessing ColumnTransformer is fitted exclusively on the training partition and never on the full dataset."*
 
 ---
 
-## 6. Preprocessing & Feature Engineering Pipeline
-
-### What steps are in your Scikit-Learn `ColumnTransformer`?
-1. **Numerical Pipeline (9 features):**
-   - `SimpleImputer(strategy='median')`: Replaces missing numeric values with training median.
-   - `IQRCapper(factor=1.5)`: Caps extreme outliers using the 1.5 * IQR rule. 
-     - *Key Viva Detail:* Features like `pdays` (96.3% are 999) and `previous` (86.3% are 0) have identical Q25 and Q75, giving an IQR of 0. A standard IQR capper would collapse them to constants! We implemented a `zero_iqr` guard that leaves zero-IQR features unclipped, preserving their predictive variance.
-   - `StandardScaler()`: Standardizes features to mean 0, variance 1.
-2. **Categorical Pipeline (11 features):**
-   - `SimpleImputer(strategy='constant', fill_value='unknown')`: Handles missing strings.
-   - `OneHotEncoder(drop='first', handle_unknown='ignore')`: Converts categorical strings into 47 binary indicator columns, dropping the reference category to prevent multicollinearity (dummy variable trap).
-3. **Total Transformed Dimensionality:** 56 total columns.
+### Defense 2: Feature Engineering of the Eight Case Study 157 Variables
+- **Examiner's Question:** *"How did you map the assignment's eight deployment variables from the Kaggle dataset?"*
+- **Textbook Defense:**
+  > *"Every single one of the eight features was derived directly from authentic Kaggle columns using transparent, reproducible formulas without data fabrication:*
+  > 1. *`age_group`: Derived by subtracting `Year_Birth` from the reference observation year 2014 and binned into `18-25`, `26-35`, `36-45`, `46-55`, `56+`.*
+  > 2. *`income`: Directly mapped from annual household `Income` in USD; 24 missing values are imputed via median strictly inside the training fold.*
+  > 3. *`previous_purchases`: Derived as the sum of historical channel purchases: `NumWebPurchases + NumCatalogPurchases + NumStorePurchases`.*
+  > 4. *`purchase_frequency`: Computed as `previous_purchases / customer_tenure_in_months`, where tenure is elapsed months between `Dt_Customer` and 2014-12-31.*
+  > 5. *`previous_campaign_response`: Binary indicator equal to 1 if the customer accepted any prior campaign (`AcceptedCmp1` to `AcceptedCmp5 >= 1`), else 0 (current target excluded).*
+  > 6. *`website_visits`: Directly mapped from monthly website visits (`NumWebVisitsMonth`).*
+  > 7. *`email_engagement`: Because the Kaggle dataset does not record raw email click timestamps, I derived an honest engagement proxy: `prior_campaign_acceptances / 5.0`. This is explicitly labeled in documentation and the UI as an engagement proxy.*
+  > 8. *`discount_usage`: Proportion of purchases completed with discount deals: `NumDealsPurchases / max(previous_purchases, 1)`, safely clamped to `[0.0, 1.0]`."*
 
 ---
 
-## 7. The Six Required Algorithms & Held-Out Test Results
+### Defense 3: Preprocessing Architecture
+- **Examiner's Question:** *"What happens inside your scikit-learn preprocessing pipeline?"*
+- **Textbook Defense:**
+  > *"We utilize a modular scikit-learn `ColumnTransformer`:*
+  > - *Numerical Pipeline (`income`, `previous_purchases`, `purchase_frequency`, `previous_campaign_response`, `website_visits`, `email_engagement`, `discount_usage`): Features pass through `SimpleImputer(strategy='median')` to handle missing income values, followed by `StandardScaler()` to standardize variances for scale-sensitive algorithms like Logistic Regression and KNN.*
+  > - *Categorical Pipeline (`age_group`): Passes through `SimpleImputer(strategy='most_frequent')` followed by `OneHotEncoder(drop='first', categories=[['18-25', '26-35', '36-45', '46-55', '56+']])` to eliminate dummy variable trap multicollinearity.*
+  > - *This transforms the 8 raw inputs into exactly 11 numeric features for model consumption, with zero data leakage between training and testing folds."*
 
-Evaluated on the **8,238 held-out test customers** (928 actual subscribers):
+---
 
-| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC | False Positive Rate (FPR) | Top-20% Capture Rate |
+### Defense 4: Defensible Model Selection
+- **Examiner's Question:** *"Why did you select Random Forest over the other five algorithms?"*
+- **Textbook Defense:**
+  > *"Model selection was governed by a strict, pre-registered decision rule based entirely on development cross-validation without inspecting test data:*
+  > 1. *Ranking by 5-fold CV PR-AUC: Random Forest achieved the highest score (0.5109 ± 0.0450), closely followed by Logistic Regression (0.5069 ± 0.0572) and Gradient Boosting (0.5002 ± 0.0551).*
+  > 2. *Tie-break Evaluation: Because the difference between Random Forest and Logistic Regression (0.0040) is smaller than the cross-validation fold variation (0.0450), they are practically close. Random Forest was selected because it demonstrated a substantially lower training out-of-fold False Positive Rate at 70% recall (0.1921 vs 0.2492).*
+  > 3. *Architectural Suitability: Random Forest effectively captures non-linear interactions (e.g. between income and past campaign participation) and handles skewed feature distributions through tree ensembles without requiring parametric distribution assumptions."*
+
+---
+
+### Defense 5: Decision Threshold Optimization & Campaign Economics
+- **Examiner's Question:** *"Why shouldn't marketing teams use the default 0.50 probability threshold?"*
+- **Textbook Defense:**
+  > *"Under an 85.1% negative class imbalance, positive probabilities are inherently compressed. At a 0.50 threshold, the model is overly conservative, achieving only 26.9% recall and capturing just 18 out of 67 test responders ($775 net profit).*
+  > *By conducting out-of-fold economic simulation on training data with assumed contact cost = $5.00 and responder gross return = $50.00 (break-even probability = 0.10):*
+  > - *At Profit-Optimal Threshold ($\tau = 0.13$): We reach 48 responders (71.6% recall) and achieve maximum net profit of $1,705.00 with an ROI of 245.3%.*
+  > - *Compared to Mass Outreach: Mass outreach costs $2,240.00 and generates 381 wasted calls ($1,905 wasted), yielding only $1,110.00 net profit. Threshold optimization saves 69.0% ($1,545.00) in wasted ad spend and increases net profit by +$595.00."*
+
+---
+
+## 4. Multi-Model Benchmark Table (Held-Out Test Set: 448 Customers)
+
+| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC | False Positive Rate (FPR) | Top-20% Capture | 5-Fold CV PR-AUC (Mean ± Std) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Random Forest** (Winner) | **0.875** | **0.720** | **0.269** | **0.391** | **0.817** | **0.571** | **0.018** | **61.2%** | **0.5109 ± 0.0450** |
+| **Logistic Regression** | 0.873 | 0.750 | 0.224 | 0.345 | 0.781 | 0.505 | 0.013 | 55.2% | 0.5069 ± 0.0572 |
+| **Gradient Boosting** | 0.873 | 0.727 | 0.239 | 0.360 | 0.817 | 0.517 | 0.016 | 59.7% | 0.5002 ± 0.0551 |
+| **K-Nearest Neighbors** | 0.884 | 0.759 | 0.328 | 0.458 | 0.784 | 0.561 | 0.018 | 58.2% | 0.4913 ± 0.0521 |
+| **Naive Bayes** | 0.810 | 0.402 | 0.552 | 0.465 | 0.750 | 0.481 | 0.144 | 55.2% | 0.4605 ± 0.0476 |
+| **Decision Tree** | 0.855 | 0.563 | 0.134 | 0.217 | 0.728 | 0.355 | 0.018 | 55.2% | 0.4013 ± 0.0458 |
+
+---
+
+## 5. Four-Strategy Marketing Economics Comparison
+
+| Strategy | Decision Threshold ($\tau$) | Contacts Targeted | Total Campaign Cost | Responders Reached | Wasted Contacts (FP) | Net Profit | Marketing ROI | Cost Saved vs. Mass Outreach |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Random Forest (Winner)** | **90.20%** | **68.97%** | 23.71% | 0.3528 | **0.8096** | **0.4871** | **0.0135** | **66.38%** (616/928) |
-| **Gradient Boosting** | 90.17% | 68.55% | 23.49% | 0.3499 | 0.8093 | 0.4840 | 0.0137 | 65.73% (610/928) |
-| **Logistic Regression** | 90.16% | 69.44% | 22.52% | 0.3401 | 0.8017 | 0.4653 | 0.0126 | 65.84% (611/928) |
-| **Decision Tree** | 90.36% | 69.36% | 25.86% | 0.3768 | 0.7919 | 0.4427 | 0.0145 | 63.47% (589/928) |
-| **K-Nearest Neighbors** | 89.99% | 65.37% | 23.60% | 0.3468 | 0.7764 | 0.4274 | 0.0159 | 62.50% (580/928) |
-| **Naive Bayes** | 86.03% | 39.67% | 46.12% | 0.4265 | 0.7748 | 0.3623 | 0.0891 | 57.33% (532/928) |
+| **Strategy 1: Contact Everyone** | 0.00 | 448 | $2,240.00 | 67 (100.0%) | 381 | $1,110.00 | 49.6% | 0.0% ($0.00) |
+| **Strategy 2: Default ML** | 0.50 | 25 | $125.00 | 18 (26.9%) | 7 | $775.00 | 620.0% | 94.4% ($2,115.00) |
+| **Strategy 3: F1-Optimal** | 0.27 | 68 | $340.00 | 38 (56.7%) | 30 | $1,560.00 | 458.8% | 84.8% ($1,900.00) |
+| **Strategy 4: Profit-Optimal** | **0.13** | **139** | **$695.00** | **48 (71.6%)** | **91** | **$1,705.00** | **245.3%** | **69.0% ($1,545.00)** |
 
 ---
 
-## 8. Model Selection Rationale
+## 6. Answers to the Six Case Study 157 Questions
 
-### Question: "Why did you choose Random Forest over Gradient Boosting?"
-**Answer:**
-> *"Model selection was conducted strictly on development training data using 5-fold Stratified Cross-Validation. Random Forest achieved the highest development PR-AUC (0.4646 ± 0.0110 vs 0.4626 ± 0.0112 for Gradient Boosting). 
-> 
-> When examining out-of-fold predictions at a fixed 70% recall target, Random Forest produced a lower False Positive Rate (0.2316 vs 0.2438). On the final held-out test set, Random Forest confirmed this superiority by achieving the highest test PR-AUC (0.4871), highest ROC-AUC (0.8096), and highest top-quintile capture rate (66.38%). Furthermore, bagging in Random Forest provides lower prediction variance and higher stability against multicollinear macroeconomic indicators compared to sequential boosting."*
+### Question 1: Can campaign responses be predicted?
+**Answer:** Yes. On held-out test data, our Random Forest classifier achieves a ROC-AUC of 0.8171 and a PR-AUC of 0.5706. Sorting customer prospects by predicted probability captures 61.19% of all responders within the top 20% of customer outreach, confirming strong predictive ranking capability.
 
----
+### Question 2: Which customer characteristics influence response?
+**Answer:** Past promotional acceptance, annual household income, and purchase frequency are the strongest predictors. Customers with previous campaign acceptance exhibit a substantially higher response propensity (odds ratio = 1.9899). Responders also show higher median income ($65,104 vs. $50,042) and higher monthly purchase cadence.
 
-## 9. Class Imbalance Handling
+### Question 3: Which algorithm performs best?
+**Answer:** Random Forest performed best overall, achieving the highest cross-validation PR-AUC (0.5109 ± 0.0450) and test ROC-AUC (0.8171), while demonstrating the lowest out-of-fold False Positive Rate at 70% recall (0.1921).
 
-### Question: "How did you address the 88:12 class imbalance?"
-**Answer:**
-> *"I systematically compared three methodologies on 5-fold cross-validation:
-> 1. Unweighted Baseline: CV PR-AUC = **0.4646** (Selected)
-> 2. Cost-sensitive weighting (`class_weight='balanced'`): CV PR-AUC = **0.4568**
-> 3. Synthetic oversampling via SMOTENC: CV PR-AUC = **0.4227**
-> 
-> Surprisingly, SMOTENC degraded precision because synthetic interpolation in a 47-dimensional one-hot space creates unrealistic synthetic points in boundary regions. The most effective approach for imbalanced data was training on the natural empirical distribution and performing post-hoc **decision threshold optimization**."*
+### Question 4: Can ML reduce unnecessary marketing expenditure?
+**Answer:** Yes. Traditional mass outreach wastes $1,905.00 contacting 381 non-responders. Deploying Random Forest at the profit-optimal threshold ($\tau = 0.13$) reduces total outreach spend from $2,240.00 down to $695.00 (a 69.0% savings) while increasing net campaign profit by +153.6% ($1,705.00 vs. $1,110.00).
 
----
+### Question 5: How can false positives be reduced?
+**Answer:** False positives are directly controlled by decision threshold tuning. Raising the threshold from the loose baseline of 0.13 to the F1-optimal cutoff of 0.27 eliminates 61 false positive contacts (from 91 down to 30), decreasing wasted calls by 67%.
 
-## 10. Decision Threshold Tuning & Economic Simulation
-
-### Question: "Why didn't you just use the standard 0.50 threshold?"
-**Answer:**
-> *"The default 0.50 threshold assumes equal misclassification costs and symmetric priors. Because only 11.27% of clients subscribe, a 0.50 cutoff produces low recall (23.7%), missing three out of four potential subscribers.
-> 
-> Using Out-of-Fold training predictions, I optimized two alternative thresholds:
-> 1. **F1-Optimal Threshold ($\tau = 0.22$):** Maximizes harmonic mean of precision and recall (F1 jumps from 0.35 to 0.49).
-> 2. **Profit-Optimal Threshold ($\tau = 0.11$):** Maximizes expected financial return under unit economic parameters ($5 per contact, $50 profit per conversion)."*
-
-### Economic Comparison Table (Held-Out Test Set: 8,238 clients)
-
-| Strategy | Threshold | Contacts Made | Wasted Contacts (FP) | Subscribers Reached | Spend ($) | Net Profit ($) | Cost Saved |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **1. Mass Outreach** | 0.00 | 8,238 | 7,310 | 928 (100%) | $41,190 | $5,210 | 0.0% |
-| **2. Default ML** | 0.50 | 319 | 99 | 220 (23.7%) | $1,595 | $9,405 | 96.1% |
-| **3. F1-Optimal** | 0.22 | 1,167 | 613 | 554 (59.7%) | $5,835 | $21,865 | 85.8% |
-| **4. Profit-Optimal** | **0.11** | **1,553** | **949** | **604 (65.1%)** | **$7,765** | **$22,435** | **81.1%** |
-
-*Takeaway:* Strategy 4 saves **$33,425 (81.1%)** in marketing expenditure compared to mass outreach while quadrupling net profit ($22,435 vs $5,210).
+### Question 6: Can the model identify potential campaign responders?
+**Answer:** Yes. The cumulative gains analysis proves that contacting only the top two deciles (top 20% ranked by propensity) captures 61.19% of all responders, achieving a lift of over 3.0x compared to random contact selection.
 
 ---
 
-## 11. Key Drivers & Business Insights
+## 7. Top 25 Rapid-Fire Viva Questions & Answers
 
-### Top Predictive Features:
-1. **Timing (`month_mar`):** Odds Ratio = **4.0319**. Contacting customers in March has 4.03x higher conversion odds compared to other months.
-2. **Economic Climate (`euribor3m`, `emp.var.rate`):** Lower benchmark interest rates significantly increase term deposit demand, as competing investment yields drop.
-3. **Prior Campaign Success (`poutcome_success`):** Odds Ratio = **1.8534**. A client who responded positively in a previous campaign has an 85% higher propensity to subscribe again.
-4. **Demographics:** Retired individuals and students exhibit higher relative conversion rates than prime-age employed workers.
+1. **Q: What is the business problem of Case Study 157?**  
+   *A:* Marketing outreach costs money per contact attempt. Blanket outreach wastes resources on disinterested consumers. Machine learning identifies high-propensity prospects before contact, maximizing campaign ROI.
 
-*Causation vs Association Disclaimer:* These metrics reflect statistical associations in historical observational data and do not prove causal intervention mechanisms.
+2. **Q: What dataset are you using?**  
+   *A:* The Kaggle Customer Personality Analysis dataset (`marketing_campaign.csv`), comprising 2,240 customer records across demographic, financial, purchasing, and campaign acceptance attributes.
 
----
+3. **Q: What are the eight deployment features in your model?**  
+   *A:* `age_group`, `income`, `previous_purchases`, `purchase_frequency`, `previous_campaign_response`, `website_visits`, `email_engagement` (proxy), and `discount_usage`.
 
-## 12. Top 25 Rapid-Fire Viva Questions & Answers
+4. **Q: How did you define the target variable?**  
+   *A:* The binary column `Response`, where 1 represents customer acceptance of the promotional offer and 0 represents non-acceptance.
 
-#### Q1: What is the target variable?
-> **A:** `y`, representing whether the client subscribed to a bank term deposit (`'yes'` = 1, `'no'` = 0).
+5. **Q: What is the class imbalance ratio in your dataset?**  
+   *A:* 85.09% non-responders (1,906) to 14.91% responders (334), an imbalance ratio of approximately 5.7 to 1.
 
-#### Q2: What metric did you use for model comparison and why?
-> **A:** Precision-Recall AUC (PR-AUC / Average Precision). ROC-AUC can be overly optimistic on highly imbalanced datasets (88:12) because a large number of true negatives keeps the False Positive Rate artificially small. PR-AUC focuses strictly on positive class performance.
+6. **Q: Why is classification accuracy an inadequate metric here?**  
+   *A:* A trivial baseline that predicts 'Will Not Respond' for every customer achieves 85.09% accuracy while capturing 0% of responders and generating zero conversions.
 
-#### Q3: What is the formula for False Positive Rate?
-> **A:** $\text{FPR} = \frac{\text{FP}}{\text{FP} + \text{TN}}$. It represents the proportion of non-interested customers who were incorrectly targeted.
+7. **Q: What evaluation metrics did you use instead?**  
+   *A:* Precision-Recall AUC (PR-AUC), ROC-AUC, Precision, Recall, F1-score, False Positive Rate (FPR), and Confusion Matrices.
 
-#### Q4: What is the formula for F1-score?
-> **A:** $\text{F1} = 2 \times \frac{\text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}} = \frac{2\text{TP}}{2\text{TP} + \text{FP} + \text{FN}}$.
+8. **Q: What is the formula for False Positive Rate (FPR)?**  
+   *A:* $FPR = \frac{FP}{FP + TN}$. It measures the proportion of actual non-responders who were mistakenly targeted.
 
-#### Q5: What is data leakage?
-> **A:** When information from outside the training dataset (or information that would not be available at the time of prediction) is used to create the model. In our project, call duration is data leakage because it is only known after calling.
+9. **Q: Why does the False Positive Rate matter in marketing?**  
+   *A:* Every false positive represents a wasted contact attempt that incurs marketing expenditure and risks consumer brand fatigue without producing revenue.
 
-#### Q6: How did you prevent data leakage in your code?
-> **A:** Dropped `duration` before splitting, fitted all imputers, scalers, and outlier cappers strictly on training data inside a `Pipeline`, and tuned thresholds using Out-of-Fold training predictions without touching the test set.
+10. **Q: How did you calculate customer tenure without data leakage?**  
+    *A:* By measuring days from customer enrollment date (`Dt_Customer`) to a fixed historical observation end date (2014-12-31), avoiding any forward-looking leakage.
 
-#### Q7: What is Out-of-Fold (OOF) prediction?
-> **A:** During 5-fold cross-validation, predictions for each validation fold are generated by models trained only on the other 4 folds. Concatenating them provides an unbiased prediction for every training record, preventing leakage when tuning decision thresholds.
+11. **Q: Why is email engagement described as a proxy?**  
+    *A:* The Kaggle dataset does not contain direct email open or click timestamps. To avoid fabricating data, we compute the historical promotional acceptance rate across earlier campaigns 1 to 5 as a defensible engagement proxy.
 
-#### Q8: What is Top-20% Customer Capture Rate?
-> **A:** When customers are ranked from highest to lowest predicted probability, the top 20% of the ranked list captures **66.38%** (616 out of 928) of all actual subscribers in the test set. This represents a 3.32x lift over random guessing (which would capture only 20%).
+12. **Q: How did you handle missing values in Income?**  
+    *A:* Using `SimpleImputer(strategy='median')` fitted strictly within the training fold during cross-validation, ensuring zero leakage into test data.
 
-#### Q9: What is the Brier Score?
-> **A:** The mean squared difference between predicted probabilities and actual binary outcomes: $\text{Brier} = \frac{1}{N}\sum(p_i - y_i)^2$. Lower is better. Our uncalibrated Random Forest achieved 0.07528.
+13. **Q: Why did you use `drop='first'` in OneHotEncoder?**  
+    *A:* To avoid the dummy variable trap (perfect multicollinearity) by dropping the reference category (`18-25`).
 
-#### Q10: Why didn't you use probability calibration?
-> **A:** We tested Isotonic calibration using `FrozenEstimator(CalibratedClassifierCV)`. The validation Brier score slightly degraded (0.07757 uncalibrated vs 0.07877 calibrated). Per our pre-specified validation rule, we deployed the uncalibrated model.
+14. **Q: What six machine learning algorithms did you implement?**  
+    *A:* Logistic Regression, K-Nearest Neighbors, Decision Tree, Random Forest, Naive Bayes (GaussianNB), and Gradient Boosting.
 
-#### Q11: What is the difference between bagging and boosting?
-> **A:** Bagging (Random Forest) trains independent trees in parallel on bootstrap samples and averages predictions to reduce variance. Boosting (Gradient Boosting) trains trees sequentially, where each new tree corrects the residual errors of prior trees to reduce bias.
+15. **Q: How were hyperparameters tuned?**  
+    *A:* Using 5-fold Stratified Cross-Validation via `GridSearchCV` on the training dataset, optimizing for Average Precision (PR-AUC).
 
-#### Q12: Why did Naive Bayes have high recall but low precision?
-> **A:** Naive Bayes assumes all features are conditionally independent. Real-world economic indicators (`euribor3m`, `emp.var.rate`, `nr.employed`) are strongly correlated ($r > 0.90$). The independence violation causes probability overconfidence, pushing many negative cases into the positive prediction zone.
+16. **Q: Why did Random Forest win over Gradient Boosting?**  
+    *A:* Random Forest achieved higher CV PR-AUC (0.5109 vs. 0.5002) and a lower out-of-fold False Positive Rate at 70% recall (0.1921 vs. 0.2066).
 
-#### Q13: What does the `var_smoothing` hyperparameter do in Gaussian Naive Bayes?
-> **A:** It adds a small portion of the largest variance of all features to the variances to stabilize calculations and prevent zero-division in probability density estimation.
+17. **Q: How do you interpret Random Forest feature importance?**  
+    *A:* Using tree-based Mean Decrease in Impurity (MDI) and permutation importance on the test set. Tree ensembles do NOT have linear coefficients.
 
-#### Q14: How does K-Nearest Neighbors work and what was its best $K$?
-> **A:** KNN computes the Euclidean distance between the test customer and all training customers in normalized feature space, assigning the majority class among the $K$ closest neighbors. The tuned optimal $K$ was **21**.
+18. **Q: What is permutation feature importance?**  
+    *A:* It measures the decrease in model score (F1-score) after randomly shuffling the values of a feature, breaking its relationship with the target.
 
-#### Q15: What is the role of `StandardScaler` in KNN vs Random Forest?
-> **A:** Essential for KNN because distance metrics are sensitive to feature scales. Random Forest is scale-invariant (splits depend on feature ordering, not magnitude), but scaling was maintained in the shared pipeline for methodological consistency.
+19. **Q: What is the top predictor of campaign response?**  
+    *A:* Prior promotional acceptance (`previous_campaign_response`), which carries an odds ratio of 1.9899 in Logistic Regression and the highest tree MDI in Random Forest.
 
-#### Q16: How does the Decision Tree prevent overfitting?
-> **A:** Through hyperparameter constraints: `max_depth=5` limits tree depth, and `min_samples_split=10` prevents splitting leaves with too few samples.
+20. **Q: What is an odds ratio?**  
+    *A:* The exponentiated coefficient ($e^{\beta}$) in Logistic Regression. An odds ratio > 1 indicates that an increase in the feature elevates the relative odds of a positive response.
 
-#### Q17: What criterion did your Decision Tree use?
-> **A:** `entropy` (Information Gain), measuring reduction in uncertainty: $H(S) = -p_1 \log_2(p_1) - p_0 \log_2(p_0)$.
+21. **Q: What is the theoretical break-even probability for marketing outreach?**  
+    *A:* $\text{Break-Even Probability} = \frac{\text{Unit Contact Cost}}{\text{Gross Revenue per Conversion}} = \frac{\$5.00}{\$50.00} = 0.10$. Any prospect with predicted probability > 0.10 has positive expected financial value.
 
-#### Q18: What is an Odds Ratio in Logistic Regression?
-> **A:** $\text{OR} = \exp(\beta_j)$. If $\text{OR} > 1$, an increase in that feature increases the odds of response. For example, `month_mar` has $\text{OR} = 4.03$, meaning March contacts have 4 times higher conversion odds than the baseline month.
+22. **Q: What is the difference between F1-optimal and Profit-optimal thresholds?**  
+    *A:* The F1-optimal threshold ($\tau = 0.27$) balances harmonic precision and recall. The Profit-optimal threshold ($\tau = 0.13$) aligns with unit contact economics to maximize total net campaign profit.
 
-#### Q19: What is the difference between `pd.cut` and `pd.qcut`?
-> **A:** `pd.cut` creates equal-width bins (or custom defined intervals like our age groups: 18-25, 26-35, etc.), while `pd.qcut` creates equal-frequency quantile bins.
+23. **Q: What is the Brier score?**  
+    *A:* The mean squared difference between predicted probabilities and actual binary outcomes ($BS = \frac{1}{N}\sum(p_i - y_i)^2$). Lower scores indicate better probability calibration.
 
-#### Q20: What is the dummy variable trap in OneHotEncoder?
-> **A:** When all $K$ categories of a categorical variable are encoded as $K$ binary columns, the columns sum to 1, causing perfect collinearity with the intercept. Setting `drop='first'` removes the first category, yielding $K-1$ linearly independent columns.
+24. **Q: What are the primary outputs of your Streamlit application?**  
+    *A:* Given the 8 customer inputs, the app outputs `WILL RESPOND` or `WILL NOT RESPOND`, the predicted probability percentage, expected contact value, and tactical recommendations.
 
-#### Q21: What is Stratified K-Fold?
-> **A:** A variation of K-Fold cross-validation where each fold contains approximately the same percentage of positive (11.27%) and negative (88.73%) samples as the complete dataset.
-
-#### Q22: How does Streamlit handle state persistence?
-> **A:** Using `st.session_state`. When widgets (like sliders or buttons) are updated, the script reruns top-to-bottom. Storing predictions in `st.session_state.single_prediction` ensures results persist across slider interactions.
-
-#### Q23: How does your batch CSV prediction handle missing columns or corrupt inputs?
-> **A:** The `validate_schema()` function checks for required columns, automatically derives `age_group` if only `age` is given, strips `duration` if accidentally uploaded, and provides informative banner messages without crashing.
-
-#### Q24: What are the economic parameters used in your business simulation?
-> **A:** Cost per contact attempt = $5.00; gross profit per subscribed customer = $50.00. The break-even probability for a single customer is $\frac{5}{50} = 10\%$.
-
-#### Q25: What is the main conclusion of your project?
-> **A:** Machine learning transforms marketing from inefficient spray-and-pray calling into a targeted, economically disciplined strategy. Random Forest with an operating threshold of 0.11 captures two-thirds of all potential subscribers while eliminating 81% of wasted outreach expenditure.
+25. **Q: What are the main limitations of your study?**  
+    *A:* 
+    1. Historical observational data from 2,240 records may not capture macroeconomic shifts or emerging product categories.
+    2. Email engagement is an empirical proxy rather than direct real-time telemetry.
+    3. Unit economics (contact cost = $5.00, conversion value = $50.00) are assumed parameters for simulation purposes and should be calibrated to specific commercial deployments.

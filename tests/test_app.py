@@ -83,49 +83,27 @@ def test_batch_csv_upload():
     at.run()
     assert len(at.exception) == 0
     
-    # Create sample CSV in memory with Kaggle schema
+    # Create sample CSV in memory with Case Study 157 schema
     sample_df = pd.DataFrame([
         {
-            'age': 35,
-            'job': 'admin.',
-            'marital': 'married',
-            'education': 'university.degree',
-            'default': 'no',
-            'housing': 'yes',
-            'loan': 'no',
-            'contact': 'cellular',
-            'month': 'may',
-            'day_of_week': 'mon',
-            'campaign': 2,
-            'pdays': 999,
-            'previous': 0,
-            'poutcome': 'nonexistent',
-            'emp.var.rate': 1.1,
-            'cons.price.idx': 93.994,
-            'cons.conf.idx': -36.4,
-            'euribor3m': 4.857,
-            'nr.employed': 5191.0
+            'age_group': '36-45',
+            'income': 58000.0,
+            'previous_purchases': 14.0,
+            'purchase_frequency': 0.85,
+            'previous_campaign_response': 0,
+            'website_visits': 5.0,
+            'email_engagement': 0.0,
+            'discount_usage': 0.15
         },
         {
-            'age': 28,
-            'job': 'student',
-            'marital': 'single',
-            'education': 'high.school',
-            'default': 'no',
-            'housing': 'no',
-            'loan': 'no',
-            'contact': 'cellular',
-            'month': 'sep',
-            'day_of_week': 'wed',
-            'campaign': 1,
-            'pdays': 6,
-            'previous': 2,
-            'poutcome': 'success',
-            'emp.var.rate': -1.8,
-            'cons.price.idx': 92.893,
-            'cons.conf.idx': -46.2,
-            'euribor3m': 1.299,
-            'nr.employed': 5099.1
+            'age_group': '46-55',
+            'income': 72000.0,
+            'previous_purchases': 22.0,
+            'purchase_frequency': 1.10,
+            'previous_campaign_response': 1,
+            'website_visits': 3.0,
+            'email_engagement': 0.2,
+            'discount_usage': 0.05
         }
     ])
     csv_bytes = sample_df.to_csv(index=False).encode('utf-8')

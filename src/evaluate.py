@@ -471,9 +471,9 @@ def compute_comprehensive_customer_profiles(X_test: pd.DataFrame, y_true: pd.Ser
     df_eval['predicted_status'] = np.where(y_pred == 1, 'Predicted Responder', 'Predicted Non-Responder')
     
     numeric_cols = [c for c in df_eval.columns if c in [
-        'age', 'campaign', 'pdays', 'previous',
-        'emp.var.rate', 'cons.price.idx', 'cons.conf.idx',
-        'euribor3m', 'nr.employed'
+        'income', 'previous_purchases', 'purchase_frequency',
+        'previous_campaign_response', 'website_visits',
+        'email_engagement', 'discount_usage'
     ]]
     if not numeric_cols:
         numeric_cols = df_eval.select_dtypes(include=[np.number]).columns.tolist()
