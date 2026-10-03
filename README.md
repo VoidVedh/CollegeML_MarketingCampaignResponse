@@ -102,8 +102,7 @@ CollegeML_MarketingCampaignResponse/
 │   ├── eda.py                       # Automated Kaggle EDA and visualization suite
 │   ├── train.py                     # Main orchestrator (CV, OOF thresholds, FrozenEstimator)
 │   ├── evaluate.py                  # Evaluation suite, bootstrap CIs, 4-strategy simulation
-│   ├── build_report.py              # Dynamic markdown generator sourced from metrics.json
-│   └── build_notebook.py            # Automated notebook compilation script
+│   └── build_report.py              # Dynamic markdown generator sourced from metrics.json
 ├── models/
 │   ├── best_model.joblib            # Serialized Kaggle-trained model pipeline
 │   ├── preprocessor.joblib          # Standalone fitted ColumnTransformer
