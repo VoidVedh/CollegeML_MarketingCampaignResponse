@@ -28,36 +28,50 @@ def run_all_checks():
     print("EXECUTING COMPREHENSIVE 10-POINT FINAL VERIFICATION AUDIT")
     print("=" * 75)
 
-    # CHECK 1: Preprocessing zero-variance & binary feature flow
+    # CHECK 1: Preprocessing zero-variance & poutcome_success feature flow
     try:
         unit_test_preprocessing()
         X_train, X_test, y_train, y_test = load_and_split_data()
         prep = create_preprocessor()
         X_t = prep.fit_transform(X_train)
         feats = get_feature_names(prep)
-        bin_idx = feats.index('previous_campaign_response')
+        bin_idx = feats.index('poutcome_success')
         var_bin = np.var(X_t[:, bin_idx])
-        assert var_bin > 0.05, f"Variance too low: {var_bin}"
+        assert var_bin > 0.01, f"Variance too low: {var_bin}"
         assert (np.var(X_t, axis=0) > 1e-6).all(), "Zero-variance column detected"
-        results["1. Preprocessing zero-variance check"] = (True, f"All 11 features have non-zero variance; previous_campaign_response var={var_bin:.4f}")
+        results["1. Preprocessing zero-variance check"] = (True, f"All {len(feats)} transformed features have non-zero variance; poutcome_success var={var_bin:.4f}")
     except Exception as e:
         results["1. Preprocessing zero-variance check"] = (False, str(e))
 
-    # CHECK 2: Flipping previous_campaign_response changes probability & odds ratio > 1
+    # CHECK 2: Flipping prior campaign success changes probability & odds ratio > 1
     try:
         model = joblib.load(os.path.join(PROJECT_ROOT, "models", "best_model.joblib"))
         cust0 = pd.DataFrame([{
-            'age_group': '26-35',
-            'income': 55000,
-            'previous_purchases': 5,
-            'purchase_frequency': 2.0,
-            'previous_campaign_response': 0,
-            'website_visits': 8,
-            'email_engagement': 0.40,
-            'discount_usage': 0.35
+            'age': 35,
+            'job': 'admin.',
+            'marital': 'married',
+            'education': 'university.degree',
+            'default': 'no',
+            'housing': 'yes',
+            'loan': 'no',
+            'contact': 'cellular',
+            'month': 'may',
+            'day_of_week': 'mon',
+            'campaign': 2,
+            'pdays': 999,
+            'previous': 0,
+            'poutcome': 'nonexistent',
+            'emp.var.rate': 1.1,
+            'cons.price.idx': 93.994,
+            'cons.conf.idx': -36.4,
+            'euribor3m': 4.857,
+            'nr.employed': 5191.0,
+            'age_group': '26-35'
         }])
         cust1 = cust0.copy()
-        cust1['previous_campaign_response'] = 1
+        cust1['poutcome'] = 'success'
+        cust1['pdays'] = 6
+        cust1['previous'] = 2
         
         p0 = float(model.predict_proba(cust0)[0, 1])
         p1 = float(model.predict_proba(cust1)[0, 1])
@@ -66,13 +80,13 @@ def run_all_checks():
         
         with open(os.path.join(PROJECT_ROOT, "models", "metrics.json")) as f:
             m = json.load(f)
-        or_val = m['logistic_regression_odds_ratios']['previous_campaign_response']
+        or_val = m['logistic_regression_odds_ratios']['poutcome_success']
         
         assert prob_delta > 0.05, f"Probability delta too small: {prob_delta}"
         assert or_val > 1.5, f"Odds ratio not clearly above 1: {or_val}"
         results["2. Binary flip probability & odds ratio > 1"] = (
             True,
-            f"Proba flipped from {p0:.4f} to {p1:.4f} (delta: +{prob_delta:.4f}, {ratio:.2f}x); Odds Ratio = {or_val:.4f} > 1.0"
+            f"Proba flipped from {p0:.4f} to {p1:.4f} (delta: +{prob_delta:.4f}, {ratio:.2f}x); poutcome_success Odds Ratio = {or_val:.4f} > 1.0"
         )
     except Exception as e:
         results["2. Binary flip probability & odds ratio > 1"] = (False, str(e))
@@ -86,15 +100,28 @@ def run_all_checks():
         assert len(at.tabs) == 4, f"Tabs count != 4: {len(at.tabs)}"
         
         # Predict button
-        btn = next((b for b in at.button if "Predict Campaign Response" in b.label), None)
+        btn = next((b for b in at.button if "Predict" in b.label), None)
+        assert btn is not None, "Predict button not found in app"
         btn.click().run()
         assert len(at.exception) == 0, f"Exceptions on predict: {at.exception}"
         assert at.session_state.single_prediction is not None
         
         # Batch upload
         sample_df = pd.DataFrame([
-            {'age_group': '26-35', 'income': 58000.0, 'previous_purchases': 10, 'purchase_frequency': 3.2, 'previous_campaign_response': 1, 'website_visits': 12, 'email_engagement': 0.75, 'discount_usage': 0.60},
-            {'age_group': None, 'income': None, 'previous_purchases': 2, 'purchase_frequency': 0.5, 'previous_campaign_response': 0, 'website_visits': 3, 'email_engagement': 0.15, 'discount_usage': 0.20}
+            {
+                'age': 35, 'job': 'admin.', 'marital': 'married', 'education': 'university.degree',
+                'default': 'no', 'housing': 'yes', 'loan': 'no', 'contact': 'cellular',
+                'month': 'may', 'day_of_week': 'mon', 'campaign': 2, 'pdays': 999, 'previous': 0,
+                'poutcome': 'nonexistent', 'emp.var.rate': 1.1, 'cons.price.idx': 93.994,
+                'cons.conf.idx': -36.4, 'euribor3m': 4.857, 'nr.employed': 5191.0
+            },
+            {
+                'age': 28, 'job': 'student', 'marital': 'single', 'education': 'high.school',
+                'default': 'no', 'housing': 'no', 'loan': 'no', 'contact': 'cellular',
+                'month': 'sep', 'day_of_week': 'wed', 'campaign': 1, 'pdays': 6, 'previous': 2,
+                'poutcome': 'success', 'emp.var.rate': -1.8, 'cons.price.idx': 92.893,
+                'cons.conf.idx': -46.2, 'euribor3m': 1.299, 'nr.employed': 5099.1
+            }
         ])
         at.file_uploader[0].upload(filename="batch.csv", content=sample_df.to_csv(index=False).encode('utf-8'), mime_type="text/csv").run()
         assert len(at.exception) == 0, f"Exceptions on batch: {at.exception}"
@@ -131,7 +158,7 @@ def run_all_checks():
         assert f1_t != profit_t
         results["5. Thresholds tuned on training OOF only"] = (
             True,
-            f"OOF F1-optimal threshold: {f1_t:.2f} | OOF Profit-optimal threshold: {profit_t:.2f}. Test set evaluated once on held-out 1,000 customers."
+            f"OOF F1-optimal threshold: {f1_t:.2f} | OOF Profit-optimal threshold: {profit_t:.2f}. Test set evaluated once on held-out 8,238 customers."
         )
     except Exception as e:
         results["5. Thresholds tuned on training OOF only"] = (False, str(e))

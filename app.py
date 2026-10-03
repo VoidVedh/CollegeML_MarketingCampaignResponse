@@ -2,12 +2,17 @@
 app.py
 Production-Grade Streamlit Web Application:
 Marketing Campaign Response Prediction Using Machine Learning
+Case Study 157 — Kaggle Marketing Dataset (Bank Term Deposit Subscription)
+
+Student: Vedh Naik
+Cohort: Jensen Huang
+Roll No.: 150096725163
 
 Features:
-- Real-time customer response prediction with interactive parameter adjustments.
+- Real-time customer response prediction with interactive Kaggle parameters.
 - State persistence: prediction results remain in st.session_state across widget interactions.
 - Dynamic threshold slider with on_click callback to reset to profit-optimal threshold.
-- Color-coded decision badge ("Will Respond" / "Will Not Respond") based on chosen threshold.
+- Color-coded decision badge ("✅ WILL RESPOND" / "❌ WILL NOT RESPOND") based on chosen threshold.
 - Probability gauges, unit economics loaded from metrics.json, and actionable recommendations.
 - Interactive Model Comparison tab with real performance tables and evaluation curves.
 - Feature Importance & Interpretability tab with SHAP, Odds Ratios, and Tree Importance.
@@ -29,13 +34,13 @@ if PROJECT_ROOT not in sys.path:
 
 # Import IQRCapper and preprocessing functions
 from src.preprocess import (
-    IQRCapper, FEATURE_COLUMNS, CONTINUOUS_FEATURES,
-    BINARY_FEATURES, CATEGORICAL_FEATURES, validate_schema
+    IQRCapper, FEATURE_COLUMNS, NUMERIC_FEATURES,
+    CATEGORICAL_FEATURES, VALID_CATEGORIES, derive_age_group, validate_schema
 )
 
 # Page configuration
 st.set_page_config(
-    page_title="Marketing Campaign Response Predictor",
+    page_title="Kaggle Marketing Campaign Response Predictor",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -53,7 +58,28 @@ st.markdown("""
     .sub-header {
         font-size: 1.05rem;
         color: #475569;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
+    }
+    .badge-author {
+        background-color: #F1F5F9;
+        border: 1px solid #CBD5E1;
+        padding: 0.3rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        color: #334155;
+        display: inline-block;
+        margin-bottom: 1rem;
+    }
+    .badge-leakage {
+        background-color: #FEF3C7;
+        border: 1px solid #F59E0B;
+        color: #92400E;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 1rem;
     }
     .metric-card {
         background-color: #F8FAFC;
@@ -120,7 +146,6 @@ def load_model_artifacts():
     if missing:
         raise FileNotFoundError(
             f"Missing required model artifact(s): {', '.join(missing)}. "
-            "The app runs in zero-training Demo Mode from pre-committed artifacts. "
             "Please ensure artifacts are present or run 'python src/train.py' to generate them."
         )
         
@@ -149,8 +174,8 @@ def predict_single_customer(model, customer_data: dict, threshold: float):
 
 def compute_model_feature_contributions(model, customer_data: dict) -> List[Dict[str, Any]]:
     """
-    Computes model-based linear feature contributions (transformed_feature * weight)
-    for transparent, truthful model interpretability.
+    Computes feature contributions for transparent model interpretability.
+    Supports both linear models (coef * val) and tree-based models (importance * val).
     """
     try:
         pipeline = model
@@ -170,28 +195,36 @@ def compute_model_feature_contributions(model, customer_data: dict) -> List[Dict
         if preprocessor is None or classifier is None:
             return []
             
-        if not hasattr(classifier, 'coef_'):
-            return []
-            
         df_in = pd.DataFrame([customer_data])
         X_trans = preprocessor.transform(df_in)
         feat_names = list(preprocessor.get_feature_names_out())
-        coefs = classifier.coef_[0]
-        
-        contributions = X_trans[0] * coefs
         
         results = []
-        for name, val, coef, contrib in zip(feat_names, X_trans[0], coefs, contributions):
-            results.append({
-                'feature': name,
-                'transformed_val': float(val),
-                'coef': float(coef),
-                'contribution': float(contrib)
-            })
+        if hasattr(classifier, 'coef_'):
+            coefs = classifier.coef_[0]
+            contributions = X_trans[0] * coefs
+            for name, val, coef, contrib in zip(feat_names, X_trans[0], coefs, contributions):
+                results.append({
+                    'feature': name,
+                    'transformed_val': float(val),
+                    'weight': float(coef),
+                    'contribution': float(contrib)
+                })
+        elif hasattr(classifier, 'feature_importances_'):
+            importances = classifier.feature_importances_
+            contributions = np.abs(X_trans[0]) * importances
+            for name, val, imp, contrib in zip(feat_names, X_trans[0], importances, contributions):
+                results.append({
+                    'feature': name,
+                    'transformed_val': float(val),
+                    'weight': float(imp),
+                    'contribution': float(contrib)
+                })
+        else:
+            return []
             
-        # Sort descending by contribution
-        results.sort(key=lambda x: x['contribution'], reverse=True)
-        return results
+        results.sort(key=lambda x: abs(x['contribution']), reverse=True)
+        return results[:10]
     except Exception:
         return []
 
@@ -199,15 +232,14 @@ def compute_model_feature_contributions(model, customer_data: dict) -> List[Dict
 # Load artifacts
 try:
     best_model, metrics_meta, feature_meta = load_model_artifacts()
-    # Profit-optimal threshold deployed by default
-    opt_threshold = float(metrics_meta.get('profit_optimal_threshold', metrics_meta.get('optimal_threshold', 0.07)))
-    f1_threshold = float(metrics_meta.get('f1_optimal_threshold', 0.30))
-    best_model_name = metrics_meta.get('deployed_model_name', metrics_meta.get('best_model_name', 'Best Model'))
+    opt_threshold = float(metrics_meta.get('profit_optimal_threshold', metrics_meta.get('optimal_threshold', 0.09)))
+    f1_threshold = float(metrics_meta.get('f1_optimal_threshold', 0.22))
+    best_model_name = metrics_meta.get('deployed_model_name', metrics_meta.get('best_model_name', 'Random Forest'))
     cost_per_contact = float(metrics_meta.get('economic_parameters', {}).get('cost_per_contact', 5.0))
     profit_per_responder = float(metrics_meta.get('economic_parameters', {}).get('profit_per_responder', 50.0))
 except Exception as e:
     st.error(f"⚠️ **Application Initialization Error:** {e}")
-    st.info("💡 **Presentation Runbook / Recovery:** Run `python src/train.py` from the project root to generate and serialize all model artifacts.")
+    st.info("💡 Run `python src/train.py` from the project root to generate and serialize all model artifacts.")
     st.stop()
 
 
@@ -229,6 +261,7 @@ def reset_to_optimal_threshold():
 # -------------------------------------------------------------
 with st.sidebar:
     st.markdown("# 🎯 Campaign Analytics")
+    st.markdown("**Case Study 157:** Marketing Campaign Response Prediction")
     st.markdown("Automated targeting engine to optimize marketing ROI and minimize wasted ad expenditure.")
     
     st.markdown("---")
@@ -248,25 +281,39 @@ with st.sidebar:
         max_value=0.95,
         step=0.01,
         key="threshold_slider",
-        help="Lower thresholds contact more customers (profit-optimal); higher thresholds contact fewer (precision-focused)."
+        help="Adjusting threshold trades off False Positives (wasted ad touches) against False Negatives (missed subscribers)."
     )
     
-    st.button("🔄 Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold)
-        
+    st.button("🔄 Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold, help="Resets the operating threshold to the simulated profit-maximizing threshold.")
+    
     st.markdown("---")
-    st.markdown("**Student:** Vedh Naik  \n**Roll No.:** 150096725163  \n**Cohort:** Jensen Huang  \n**Case Study:** 157")
-    st.markdown("[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/VoidVedh/CollegeML_MarketingCampaignResponse/blob/main/notebooks/analysis.ipynb)")
+    st.subheader("Student & Project Details")
+    st.markdown("**Name:** Vedh Naik")
+    st.markdown("**Cohort:** Jensen Huang")
+    st.markdown("**Roll No.:** `150096725163`")
+    st.markdown("**Dataset:** [Kaggle Marketing Dataset](https://www.kaggle.com/competitions/marketing-dataset/data)")
+    
+    colab_link = "https://colab.research.google.com/github/VoidVedh/CollegeML_MarketingCampaignResponse/blob/main/notebooks/analysis.ipynb"
+    st.markdown(f"[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]({colab_link})")
 
 
 # -------------------------------------------------------------
-# MAIN CONTENT HEADER
+# MAIN HEADER
 # -------------------------------------------------------------
-st.markdown('<div class="main-header">Marketing Campaign Response Prediction</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Identify high-propensity customers for promotional campaigns, cut ad spend waste, and maximize marketing ROI.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎯 Kaggle Marketing Campaign Response Predictor</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="sub-header">Case Study 157 — Bank Term Deposit Subscription Prediction | '
+    'Machine Learning Pipeline with Zero Call-Duration Leakage</div>',
+    unsafe_allow_html=True
+)
+st.markdown(
+    '<div class="badge-author">👤 <b>Vedh Naik</b> | Cohort: <b>Jensen Huang</b> | Roll No: <b>150096725163</b></div> '
+    '<div class="badge-leakage">🛡️ <b>Target Leakage Protection:</b> Call duration is strictly excluded</div>',
+    unsafe_allow_html=True
+)
 
-# Navigation Tabs
-tab_single, tab_comparison, tab_features, tab_batch = st.tabs([
-    "🎯 Single Customer Scoring",
+tab_single, tab_benchmark, tab_importance, tab_batch = st.tabs([
+    "🎯 Single Client Prediction",
     "📊 Algorithm Benchmark & Comparison",
     "🔍 Feature Importance & Insights",
     "📁 Batch CSV Prediction"
@@ -274,117 +321,94 @@ tab_single, tab_comparison, tab_features, tab_batch = st.tabs([
 
 
 # -------------------------------------------------------------
-# TAB 1: SINGLE CUSTOMER PREDICTION
+# TAB 1: SINGLE CLIENT PREDICTION
 # -------------------------------------------------------------
 with tab_single:
-    st.markdown("### Customer Profile & Behavioral Attributes")
-    st.markdown("Adjust the 8 demographic and engagement variables below to simulate a customer and generate instant targeting predictions.")
+    st.markdown("### Client Profile & Campaign Context")
+    st.markdown("Enter client demographic, contact campaign, and macroeconomic indicators to generate a real-time propensity score and commercial recommendation.")
     
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        age_group = st.selectbox(
-            "Age Group",
-            options=['18-25', '26-35', '36-45', '46-55', '56+'],
-            index=1,
-            help="Demographic age bucket of the customer."
-        )
-        income = st.number_input(
-            "Estimated Annual Income ($)",
-            min_value=10000.0,
-            max_value=350000.0,
-            value=55000.0,
-            step=2500.0,
-            format="%.0f",
-            help="Annual household income (numeric, roughly $15k-$150k)."
-        )
-        previous_purchases = st.number_input(
-            "Lifetime Previous Purchases",
-            min_value=0,
-            max_value=100,
-            value=7,
-            step=1,
-            help="Total historical order count across lifetime."
-        )
-        
-    with col2:
-        purchase_frequency = st.number_input(
-            "Purchase Frequency (orders/month)",
-            min_value=0.0,
-            max_value=20.0,
-            value=2.0,
-            step=0.25,
-            format="%.2f",
-            help="Monthly order cadence velocity."
-        )
-        previous_campaign_response = st.radio(
-            "Responded to Previous Campaign?",
-            options=[0, 1],
-            format_func=lambda x: "Yes (1)" if x == 1 else "No (0)",
-            index=0,
-            horizontal=True,
-            help="Did this customer respond to the previous promotional campaign?"
-        )
-        website_visits = st.slider(
-            "Monthly Website Visits",
-            min_value=0,
-            max_value=40,
-            value=8,
-            step=1,
-            help="Number of web/app browsing sessions in the past 30 days."
-        )
-        
-    with col3:
-        email_engagement = st.slider(
-            "Email Engagement Rate (0.0 - 1.0)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.45,
-            step=0.01,
-            help="Proportion of promotional emails opened and clicked."
-        )
-        discount_usage = st.slider(
-            "Discount Usage Share (0.0 - 1.0)",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.35,
-            step=0.01,
-            help="Proportion of past orders placed with coupon or promo discount."
-        )
+    with st.expander("👤 1. Client Demographics & Financial Status", expanded=True):
+        d_col1, d_col2, d_col3 = st.columns(3)
+        with d_col1:
+            age = st.slider("Client Age (years)", min_value=18, max_value=95, value=35, step=1, help="Age in years. Used to derive standard age groups.")
+            job = st.selectbox("Job Category", options=VALID_CATEGORIES["job"], index=0, help="Client's occupation.")
+            marital = st.selectbox("Marital Status", options=VALID_CATEGORIES["marital"], index=0)
+        with d_col2:
+            education = st.selectbox("Education Level", options=VALID_CATEGORIES["education"], index=0)
+            default = st.selectbox("Credit Default History", options=VALID_CATEGORIES["default"], index=0, help="Has credit in default?")
+        with d_col3:
+            housing = st.selectbox("Housing Loan", options=VALID_CATEGORIES["housing"], index=0, help="Has housing loan?")
+            loan = st.selectbox("Personal Loan", options=VALID_CATEGORIES["loan"], index=0, help="Has personal loan?")
+
+    with st.expander("📞 2. Campaign & Contact Interaction History", expanded=True):
+        c_col1, c_col2, c_col3 = st.columns(3)
+        with c_col1:
+            contact = st.selectbox("Contact Communication Channel", options=VALID_CATEGORIES["contact"], index=0)
+            month = st.selectbox("Last Contact Month", options=VALID_CATEGORIES["month"], index=0)
+            day_of_week = st.selectbox("Last Contact Day of Week", options=VALID_CATEGORIES["day_of_week"], index=1)
+        with c_col2:
+            campaign = st.number_input("Contacts in Current Campaign", min_value=1, max_value=50, value=2, step=1, help="Number of contacts performed during this campaign.")
+            previous = st.number_input("Previous Contacts Count", min_value=0, max_value=10, value=0, step=1, help="Number of contacts performed before this campaign.")
+        with c_col3:
+            pdays = st.number_input("Days Since Previous Contact (pdays)", min_value=0, max_value=999, value=999, step=1, help="999 means client was not previously contacted.")
+            poutcome = st.selectbox("Previous Campaign Outcome", options=VALID_CATEGORIES["poutcome"], index=0, help="Outcome of the previous marketing campaign.")
+
+    with st.expander("📈 3. Macroeconomic Climate Indicators", expanded=True):
+        m_col1, m_col2, m_col3 = st.columns(3)
+        with m_col1:
+            emp_var_rate = st.number_input("Employment Variation Rate (emp.var.rate)", min_value=-3.4, max_value=1.4, value=1.1, step=0.1, format="%.2f", help="Quarterly economic indicator.")
+            cons_price_idx = st.number_input("Consumer Price Index (cons.price.idx)", min_value=92.0, max_value=95.0, value=93.994, step=0.001, format="%.3f")
+        with m_col2:
+            cons_conf_idx = st.number_input("Consumer Confidence Index (cons.conf.idx)", min_value=-55.0, max_value=-25.0, value=-36.4, step=0.1, format="%.1f")
+            euribor3m = st.number_input("Euribor 3-Month Rate (euribor3m)", min_value=0.5, max_value=5.5, value=4.857, step=0.01, format="%.3f", help="Daily 3-month Euribor interbank benchmark rate.")
+        with m_col3:
+            nr_employed = st.number_input("Number of Employees (nr.employed)", min_value=4900.0, max_value=5300.0, value=5191.0, step=1.0, format="%.1f", help="Quarterly employee benchmark count in thousands.")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    predict_btn = st.button("🚀 Predict Campaign Response", type="primary")
+    predict_btn = st.button("🚀 Predict Term Deposit Subscription", type="primary")
     
     if predict_btn:
+        # Automatically derive age_group from age
+        age_group_val = derive_age_group(pd.Series([age])).iloc[0]
+        
         customer_data = {
-            'age_group': age_group,
-            'income': float(income),
-            'previous_purchases': int(previous_purchases),
-            'purchase_frequency': float(purchase_frequency),
-            'previous_campaign_response': int(previous_campaign_response),
-            'website_visits': int(website_visits),
-            'email_engagement': float(email_engagement),
-            'discount_usage': float(discount_usage)
+            'age': float(age),
+            'campaign': float(campaign),
+            'pdays': float(pdays),
+            'previous': float(previous),
+            'emp.var.rate': float(emp_var_rate),
+            'cons.price.idx': float(cons_price_idx),
+            'cons.conf.idx': float(cons_conf_idx),
+            'euribor3m': float(euribor3m),
+            'nr.employed': float(nr_employed),
+            'job': str(job),
+            'marital': str(marital),
+            'education': str(education),
+            'default': str(default),
+            'housing': str(housing),
+            'loan': str(loan),
+            'contact': str(contact),
+            'month': str(month),
+            'day_of_week': str(day_of_week),
+            'poutcome': str(poutcome),
+            'age_group': str(age_group_val)
         }
         
         try:
             pred_class, proba = predict_single_customer(best_model, customer_data, selected_threshold)
-            
-            # Model-based feature contributions
             model_contributions = compute_model_feature_contributions(best_model, customer_data)
             
-            # General customer characteristics
             characteristics = []
-            if previous_campaign_response == 1:
-                characteristics.append("Customer previously responded to a promotional campaign.")
-            if email_engagement >= 0.50:
-                characteristics.append(f"High email interaction rate ({email_engagement*100:.0f}% open/click rate).")
-            if purchase_frequency >= 2.5:
-                characteristics.append(f"Active recurring buyer ({purchase_frequency:.1f} orders/month).")
-            if discount_usage >= 0.45:
-                characteristics.append(f"Price-conscious buyer ({discount_usage*100:.0f}% coupon usage rate).")
-            if income >= 75000:
-                characteristics.append(f"Upper-middle income tier (${income:,.0f}/year).")
+            if poutcome == "success":
+                characteristics.append("Client previously subscribed to a bank term deposit (poutcome='success').")
+            elif poutcome == "failure":
+                characteristics.append("Client previously contacted but did not subscribe (poutcome='failure').")
+            if pdays < 999:
+                characteristics.append(f"Recently contacted {pdays} days ago.")
+            if euribor3m < 2.0:
+                characteristics.append(f"Low interest rate environment (Euribor: {euribor3m:.2f}%), elevating deposit attractiveness.")
+            if job in ["retired", "student"]:
+                characteristics.append(f"Client in demographic segment with historically high conversion propensity ('{job}').")
                 
             st.session_state.single_prediction = {
                 'pred_class': pred_class,
@@ -406,7 +430,7 @@ with tab_single:
         exp_val = proba * profit_per_responder - cost_per_contact
         
         st.markdown("---")
-        st.subheader("🎯 Prediction Result & Marketing Recommendation")
+        st.subheader("🎯 Prediction Result & Commercial Recommendation")
         
         res_col1, res_col2 = st.columns([1, 2])
         
@@ -417,224 +441,178 @@ with tab_single:
             else:
                 st.markdown('<div class="badge-no-respond">❌ WILL NOT RESPOND</div>', unsafe_allow_html=True)
                 
-            st.markdown(f"**Predicted Response Probability:** `{proba*100:.2f}%`")
+            st.markdown(f"**Predicted Subscription Probability:** `{proba*100:.2f}%`")
             st.caption(f"Operating Threshold: **{selected_threshold:.2f}** | Theoretical Break-Even: **{break_even_p*100:.1f}%**")
             
-            # Visual probability gauge
             st.progress(min(max(float(proba), 0.0), 1.0))
             
-            # Economic metrics breakdown
             st.markdown(f"""
             **Unit Economic Simulation:**
             - Contact Cost: `${cost_per_contact:.2f}`
-            - Responder Value: `${profit_per_responder:.2f}`
+            - Gross Profit per Responder: `${profit_per_responder:.2f}`
             - Individual Expected Net Value: **${exp_val:+.2f}**
             """)
             
         with res_col2:
-            st.markdown("#### Actionable Commercial Strategy")
+            st.markdown("#### Actionable Strategy Recommendation")
             if pred_class == 1:
                 if proba >= break_even_p:
                     econ_statement = (
-                        f"Response probability ({proba*100:.1f}%) exceeds the theoretical individual break-even probability ({break_even_p*100:.1f}%). "
+                        f"Response probability ({proba*100:.1f}%) exceeds individual break-even ({break_even_p*100:.1f}%). "
                         f"Expected net value per contact attempt is positive (+${exp_val:.2f})."
                     )
                 else:
                     econ_statement = (
-                        f"Response probability ({proba*100:.1f}%) meets the simulated operating threshold ({selected_threshold:.2f}) "
-                        f"but falls below theoretical individual break-even ({break_even_p*100:.1f}%), resulting in a marginal individual expected value of ${exp_val:.2f}. "
-                        "Under assumed portfolio economics, targeting this volume captures incremental responders that maximize overall campaign net profit."
+                        f"Response probability ({proba*100:.1f}%) meets the operating threshold ({selected_threshold:.2f}) "
+                        f"even though individual break-even is {break_even_p*100:.1f}%. "
+                        "Under portfolio targeting, capturing this volume maximizes overall campaign profit."
                     )
                 recommendation = (
-                    f"🌟 **Target Customer:** Prediction probability ({proba*100:.1f}%) meets or exceeds the selected operating threshold ({selected_threshold:.2f}). "
-                    f"{econ_statement} Allocating marketing outreach with personalized incentives is recommended."
+                    f"🌟 **Target Client:** Propensity ({proba*100:.1f}%) meets or exceeds the operating threshold ({selected_threshold:.2f}). "
+                    f"{econ_statement} Prioritize outreach with tailored term deposit product offerings."
                 )
             else:
                 recommendation = (
-                    f"🛑 **Suppression Recommended:** Prediction probability ({proba*100:.1f}%) falls below operating threshold ({selected_threshold:.2f}). "
-                    f"Expected value is negative (${exp_val:.2f}). Suppressing saves ${cost_per_contact:.2f} in direct outreach. "
-                    "Funnel into low-cost organic nurture streams instead."
+                    f"🛑 **Suppress Contact:** Predicted probability ({proba*100:.1f}%) falls below operating threshold ({selected_threshold:.2f}). "
+                    f"Expected net return is negative (${exp_val:+.2f}). "
+                    "Suppress direct telemarketing contact to conserve budget and prevent client fatigue."
                 )
                 
             st.markdown(f'<div class="recommendation-box">{recommendation}</div>', unsafe_allow_html=True)
             
-            # Model-based feature contributions
-            contributions = p_res.get('contributions', [])
-            if contributions:
-                st.markdown("**Model-Based Feature Contributions (Fitted Pipeline $\\beta_j \\cdot x_j$):**")
-                pos_contribs = [c for c in contributions if c['contribution'] > 0]
-                neg_contribs = [c for c in contributions if c['contribution'] < 0]
-                
-                c_col1, c_col2 = st.columns(2)
-                with c_col1:
-                    st.caption("🟢 **Elevating Response Propensity:**")
-                    for c in pos_contribs[:3]:
-                        st.markdown(f"- `{c['feature']}`: **+{c['contribution']:.3f}** (weight: {c['coef']:+.2f})")
-                with c_col2:
-                    st.caption("🔴 **Lowering Response Propensity:**")
-                    for c in neg_contribs[-3:]:
-                        st.markdown(f"- `{c['feature']}`: **{c['contribution']:.3f}** (weight: {c['coef']:+.2f})")
-            
-            # General characteristics
-            characteristics = p_res.get('characteristics', [])
-            if characteristics:
-                st.markdown("**Customer Context:**")
-                for char in characteristics:
-                    st.markdown(f"- {char}")
+            if p_res['characteristics']:
+                st.markdown("**Key Behavioral Context:**")
+                for ch in p_res['characteristics']:
+                    st.markdown(f"- {ch}")
+                    
+        # Feature contributions
+        if p_res.get('contributions'):
+            st.markdown("#### Top Model Feature Drivers for This Client")
+            contrib_df = pd.DataFrame(p_res['contributions'])
+            st.dataframe(contrib_df, use_container_width=True)
 
 
 # -------------------------------------------------------------
-# TAB 2: MODEL COMPARISON & PERFORMANCE
+# TAB 2: BENCHMARK & COMPARISON
 # -------------------------------------------------------------
-with tab_comparison:
-    st.markdown("### Comprehensive Benchmark: 6 Machine Learning Algorithms")
-    st.markdown("Evaluation across 5-Fold Stratified Cross-Validation (mean ± std) and held-out test set performance.")
+with tab_benchmark:
+    st.markdown("### 6-Algorithm Comparative Benchmark (Held-Out Test Set: 8,238 Clients)")
+    st.markdown(
+        "All six classification algorithms were tuned strictly via 5-fold Stratified Cross-Validation on the development set. "
+        "The held-out test set was evaluated once."
+    )
     
     comp_csv_path = os.path.join(PROJECT_ROOT, "reports", "results_comparison.csv")
     if os.path.exists(comp_csv_path):
-        results_df = pd.read_csv(comp_csv_path)
+        benchmark_df = pd.read_csv(comp_csv_path)
+        st.dataframe(
+            benchmark_df[['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC', 'FPR', 'FPR_at_Recall_70', 'Top20_Capture_Rate', 'CV_PR_AUC_Mean', 'CV_PR_AUC_Std']],
+            use_container_width=True
+        )
         
-        # Display formatted table
-        cols_to_show = ['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC', 'FPR', 'FPR_at_Recall_70', 'CV_PR_AUC_Mean', 'CV_ROC_AUC_Mean']
-        present_cols = [c for c in cols_to_show if c in results_df.columns]
-        display_df = results_df[present_cols].copy()
-        
-        for col in present_cols[1:]:
-            display_df[col] = display_df[col].apply(lambda x: f"{x:.4f}" if isinstance(x, (int, float)) else str(x))
-            
-        st.dataframe(display_df, hide_index=True)
-        
-        st.info("💡 **Defensible Model Selection:** With an imbalanced target (~20% response rate), models within 1 standard deviation of CV PR-AUC are statistically tied. The winner is selected based on CV PR-AUC, then tie-broken by lower FPR at 70% recall and model interpretability.")
-        
-    col_chart1, col_chart2 = st.columns(2)
-    
-    with col_chart1:
-        st.markdown("#### Performance Metrics Bar Chart")
-        bar_path = os.path.join(PROJECT_ROOT, "reports", "figures", "metrics_comparison_bar.png")
-        if os.path.exists(bar_path):
-            st.image(bar_path, width="stretch")
-            
-        st.markdown("#### Precision-Recall (PR) Curves")
-        pr_path = os.path.join(PROJECT_ROOT, "reports", "figures", "pr_curves_all_models.png")
-        if os.path.exists(pr_path):
-            st.image(pr_path, width="stretch")
-            
-    with col_chart2:
-        st.markdown("#### Receiver Operating Characteristic (ROC) Curves")
-        roc_path = os.path.join(PROJECT_ROOT, "reports", "figures", "roc_curves_all_models.png")
-        if os.path.exists(roc_path):
-            st.image(roc_path, width="stretch")
-            
-        st.markdown("#### Confusion Matrix Grid (All 6 Models)")
-        cm_path = os.path.join(PROJECT_ROOT, "reports", "figures", "confusion_matrices_grid.png")
-        if os.path.exists(cm_path):
-            st.image(cm_path, width="stretch")
-
-    # Business Simulation comparison
     st.markdown("---")
-    st.markdown("### Marketing Economics Simulation: Cost vs Net Profit & ROI")
-    sim_csv_path = os.path.join(PROJECT_ROOT, "reports", "business_simulation.csv")
-    if os.path.exists(sim_csv_path):
-        sim_df = pd.read_csv(sim_csv_path)
-        st.dataframe(sim_df, hide_index=True)
+    st.subheader("Performance Visualizations")
+    
+    b_col1, b_col2 = st.columns(2)
+    fig_dir = os.path.join(PROJECT_ROOT, "reports", "figures")
+    
+    with b_col1:
+        roc_img = os.path.join(fig_dir, "roc_curves_all_models.png")
+        if os.path.exists(roc_img):
+            st.image(roc_img, caption="Receiver Operating Characteristic (ROC) Curves", use_container_width=True)
+            
+    with b_col2:
+        pr_img = os.path.join(fig_dir, "pr_curves_all_models.png")
+        if os.path.exists(pr_img):
+            st.image(pr_img, caption="Precision-Recall (PR) Curves", use_container_width=True)
+            
+    st.markdown("---")
+    bar_img = os.path.join(fig_dir, "metrics_comparison_bar.png")
+    if os.path.exists(bar_img):
+        st.image(bar_img, caption="Comparative Metric Overview Across All 6 Algorithms", use_container_width=True)
         
-    sim_img_path = os.path.join(PROJECT_ROOT, "reports", "figures", "business_simulation_roi.png")
-    if os.path.exists(sim_img_path):
-        st.image(sim_img_path, width="stretch")
+    cm_img = os.path.join(fig_dir, "confusion_matrices_grid.png")
+    if os.path.exists(cm_img):
+        st.image(cm_img, caption="Confusion Matrix Grid Evaluated at Each Model's Optimal Threshold", use_container_width=True)
 
 
 # -------------------------------------------------------------
 # TAB 3: FEATURE IMPORTANCE & INSIGHTS
 # -------------------------------------------------------------
-with tab_features:
-    st.markdown("### What Drives a Customer to Respond?")
-    st.markdown("Interpretability insights derived from Tree Impurity, Permutation Importance, Logistic Odds Ratios, and SHAP explainability.")
+with tab_importance:
+    st.markdown("### Model Explainability & Key Drivers")
+    st.markdown(
+        "Identifying which client, campaign, and macroeconomic factors influence bank term deposit subscription propensity. "
+        "*Note: Feature importance indicates predictive association and does not prove causal intervention effects.*"
+    )
     
-    fcol1, fcol2 = st.columns(2)
+    i_col1, i_col2 = st.columns(2)
     
-    with fcol1:
-        st.markdown("#### Tree-Based MDI Feature Importance")
-        tree_fi_path = os.path.join(PROJECT_ROOT, "reports", "figures", "feature_importance_tree.png")
-        if os.path.exists(tree_fi_path):
-            st.image(tree_fi_path, width="stretch")
+    with i_col1:
+        tree_fi = os.path.join(fig_dir, "feature_importance_tree.png")
+        if os.path.exists(tree_fi):
+            st.image(tree_fi, caption="Tree-Based Feature Importances (Top 20 MDI)", use_container_width=True)
             
-        st.markdown("#### Logistic Regression Odds Ratios (exp(β))")
-        or_path = os.path.join(PROJECT_ROOT, "reports", "figures", "feature_importance_odds_ratios.png")
-        if os.path.exists(or_path):
-            st.image(or_path, width="stretch")
+        shap_img = os.path.join(fig_dir, "shap_summary.png")
+        if os.path.exists(shap_img):
+            st.image(shap_img, caption="SHAP Summary Plot (Top 15 Drivers)", use_container_width=True)
             
-    with fcol2:
-        st.markdown("#### Permutation Importance on Test Set")
-        perm_path = os.path.join(PROJECT_ROOT, "reports", "figures", "feature_importance_permutation.png")
-        if os.path.exists(perm_path):
-            st.image(perm_path, width="stretch")
+    with i_col2:
+        perm_fi = os.path.join(fig_dir, "feature_importance_permutation.png")
+        if os.path.exists(perm_fi):
+            st.image(perm_fi, caption="Permutation Feature Importance on Test Set", use_container_width=True)
             
-        st.markdown("#### SHAP Summary Plot")
-        shap_path = os.path.join(PROJECT_ROOT, "reports", "figures", "shap_summary.png")
-        if os.path.exists(shap_path):
-            st.image(shap_path, width="stretch")
+        or_img = os.path.join(fig_dir, "feature_importance_odds_ratios.png")
+        if os.path.exists(or_img):
+            st.image(or_img, caption="Logistic Regression Odds Ratios (exp(β))", use_container_width=True)
             
     st.markdown("---")
-    st.markdown("### Profile Comparison: Responders vs Non-Responders (Actual & Predicted)")
-    prof_csv_path = os.path.join(PROJECT_ROOT, "reports", "customer_profiles.csv")
-    if os.path.exists(prof_csv_path):
-        prof_df = pd.read_csv(prof_csv_path, header=[0, 1], index_col=0)
-        st.dataframe(prof_df)
-        st.caption("Averages and medians for actual and predicted classes across core financial and engagement features.")
+    gains_img = os.path.join(fig_dir, "cumulative_gains_lift.png")
+    if os.path.exists(gains_img):
+        st.image(gains_img, caption="Cumulative Gains and Decile Lift Charts", use_container_width=True)
 
 
 # -------------------------------------------------------------
-# TAB 4: BATCH PREDICTION
+# TAB 4: BATCH CSV PREDICTION
 # -------------------------------------------------------------
 with tab_batch:
-    st.markdown("### Batch Customer Scoring from CSV")
-    st.markdown("Upload any customer CSV to generate batch predictions, response probabilities, and targeted marketing flags.")
+    st.markdown("### Batch Client Propensity Scoring")
+    st.markdown("Upload a CSV file containing client records to score their term deposit subscription probabilities in bulk.")
     
-    st.markdown("""
-    **Required Columns:** `age_group`, `income`, `previous_purchases`, `purchase_frequency`, `previous_campaign_response`, `website_visits`, `email_engagement`, `discount_usage`
-    """)
-    
-    # Download sample template
     sample_data = pd.DataFrame([
         {
-            'age_group': '26-35',
-            'income': 58000,
-            'previous_purchases': 10,
-            'purchase_frequency': 3.2,
-            'previous_campaign_response': 1,
-            'website_visits': 12,
-            'email_engagement': 0.75,
-            'discount_usage': 0.60
+            'age': 35, 'job': 'admin.', 'marital': 'married', 'education': 'university.degree',
+            'default': 'no', 'housing': 'yes', 'loan': 'no', 'contact': 'cellular',
+            'month': 'may', 'day_of_week': 'mon', 'campaign': 2, 'pdays': 999,
+            'previous': 0, 'poutcome': 'nonexistent', 'emp.var.rate': 1.1,
+            'cons.price.idx': 93.994, 'cons.conf.idx': -36.4, 'euribor3m': 4.857,
+            'nr.employed': 5191.0
         },
         {
-            'age_group': '18-25',
-            'income': 24000,
-            'previous_purchases': 2,
-            'purchase_frequency': 0.5,
-            'previous_campaign_response': 0,
-            'website_visits': 3,
-            'email_engagement': 0.15,
-            'discount_usage': 0.20
+            'age': 28, 'job': 'student', 'marital': 'single', 'education': 'high.school',
+            'default': 'no', 'housing': 'no', 'loan': 'no', 'contact': 'cellular',
+            'month': 'sep', 'day_of_week': 'wed', 'campaign': 1, 'pdays': 6,
+            'previous': 2, 'poutcome': 'success', 'emp.var.rate': -1.8,
+            'cons.price.idx': 92.893, 'cons.conf.idx': -46.2, 'euribor3m': 1.299,
+            'nr.employed': 5099.1
         },
         {
-            'age_group': '46-55',
-            'income': 88000,
-            'previous_purchases': 15,
-            'purchase_frequency': 1.8,
-            'previous_campaign_response': 0,
-            'website_visits': 6,
-            'email_engagement': 0.40,
-            'discount_usage': 0.45
+            'age': 55, 'job': 'retired', 'marital': 'married', 'education': 'basic.4y',
+            'default': 'no', 'housing': 'yes', 'loan': 'no', 'contact': 'telephone',
+            'month': 'aug', 'day_of_week': 'fri', 'campaign': 3, 'pdays': 999,
+            'previous': 0, 'poutcome': 'nonexistent', 'emp.var.rate': 1.4,
+            'cons.price.idx': 93.444, 'cons.conf.idx': -36.1, 'euribor3m': 4.963,
+            'nr.employed': 5228.1
         }
     ])
     st.download_button(
         label="📥 Download Sample CSV Template",
         data=sample_data.to_csv(index=False),
-        file_name="sample_campaign_input.csv",
+        file_name="sample_kaggle_campaign_input.csv",
         mime="text/csv"
     )
     
-    uploaded_file = st.file_uploader("Upload Customer CSV File", type=["csv"])
+    uploaded_file = st.file_uploader("Upload Client CSV File", type=["csv"])
     
     if uploaded_file is not None:
         try:
@@ -652,50 +630,28 @@ with tab_batch:
                 st.error("Uploaded CSV is empty.")
                 st.stop()
 
-            missing_cols = [col for col in FEATURE_COLUMNS if col not in df_upload.columns]
-            if missing_cols:
-                st.error(f"Uploaded CSV is missing required columns: {', '.join(missing_cols)}")
-                st.stop()
-
             st.write(f"Uploaded file contains **{len(df_upload)} records**.")
             
-            # Validate schema without converting NaN in age_group to string
-            df_clean, audit_report = validate_schema(df_upload, require_target=False)
+            is_valid, warnings_or_errors, df_clean = validate_schema(df_upload)
             
-            # Display audit warnings if anomalies exist
-            has_warnings = False
-            warning_messages = []
-            
-            if audit_report['missing_rows']:
-                has_warnings = True
-                miss_details = ", ".join([f"{col}: {cnt} rows" for col, cnt in audit_report['missing_rows'].items()])
-                warning_messages.append(f"**Missing values detected and imputed:** {miss_details} (handled by median/mode imputer).")
+            if not is_valid:
+                st.error("⚠️ Schema Validation Failed:\n- " + "\n- ".join(warnings_or_errors))
+                st.stop()
                 
-            if audit_report['out_of_range_rows']:
-                has_warnings = True
-                range_details = ", ".join([f"{col}: {cnt} rows" for col, cnt in audit_report['out_of_range_rows'].items()])
-                warning_messages.append(f"**Out-of-range values clipped to valid bounds:** {range_details}.")
-                
-            if audit_report['unknown_categories']:
-                has_warnings = True
-                cat_details = ", ".join([f"{col}: {cnt} rows" for col, cnt in audit_report['unknown_categories'].items()])
-                warning_messages.append(f"**Unknown categorical labels imputed with mode:** {cat_details}.")
-                
-            if has_warnings:
-                st.warning("⚠️ **Data Quality Audit Report:**\n\n" + "\n\n".join(warning_messages))
+            if warnings_or_errors:
+                st.info("ℹ️ Processing Notes:\n- " + "\n- ".join(warnings_or_errors))
             
             # Predict
             probas = best_model.predict_proba(df_clean[FEATURE_COLUMNS])[:, 1]
             preds = (probas >= selected_threshold).astype(int)
             
             df_result = df_upload.copy()
-            df_result['response_probability'] = np.round(probas, 4)
-            df_result['predicted_responded'] = preds
-            df_result['decision'] = np.where(preds == 1, 'Target Customer', 'Suppress / Do Not Contact')
+            df_result['subscription_probability'] = np.round(probas, 4)
+            df_result['predicted_subscribe'] = preds
+            df_result['decision'] = np.where(preds == 1, 'Target Client (Will Respond)', 'Suppress / Do Not Contact')
             
             st.success(f"✅ Batch scoring completed successfully using decision threshold {selected_threshold:.2f}!")
             
-            # Summary metrics of the batch
             n_target = int(preds.sum())
             pct_target = (n_target / len(preds)) * 100 if len(preds) > 0 else 0
             cost_total = n_target * cost_per_contact
@@ -707,14 +663,13 @@ with tab_batch:
             bcol3.metric("Campaign Spend", f"${cost_total:,.2f}")
             bcol4.metric("Ad Spend Saved", f"${cost_saved:,.2f}")
             
-            st.dataframe(df_result.head(25))
+            st.dataframe(df_result.head(25), use_container_width=True)
             
-            # Download scored CSV
             csv_export = df_result.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Scored CSV with Predictions",
                 data=csv_export,
-                file_name="campaign_scored_predictions.csv",
+                file_name="kaggle_scored_predictions.csv",
                 mime="text/csv"
             )
             

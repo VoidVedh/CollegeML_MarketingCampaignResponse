@@ -471,10 +471,12 @@ def compute_comprehensive_customer_profiles(X_test: pd.DataFrame, y_true: pd.Ser
     df_eval['predicted_status'] = np.where(y_pred == 1, 'Predicted Responder', 'Predicted Non-Responder')
     
     numeric_cols = [c for c in df_eval.columns if c in [
-        'income', 'previous_purchases', 'purchase_frequency',
-        'previous_campaign_response', 'website_visits',
-        'email_engagement', 'discount_usage'
+        'age', 'campaign', 'pdays', 'previous',
+        'emp.var.rate', 'cons.price.idx', 'cons.conf.idx',
+        'euribor3m', 'nr.employed'
     ]]
+    if not numeric_cols:
+        numeric_cols = df_eval.select_dtypes(include=[np.number]).columns.tolist()
     
     actual_summary = df_eval.groupby('actual_status')[numeric_cols].agg(['mean', 'median']).round(2)
     predicted_summary = df_eval.groupby('predicted_status')[numeric_cols].agg(['mean', 'median']).round(2)
@@ -702,10 +704,12 @@ def analyze_feature_importances(
         importances = tree_estimator.feature_importances_
         fi_df = pd.DataFrame({'feature': feature_names, 'importance': importances})
         fi_df = fi_df.sort_values('importance', ascending=True)
+        if len(fi_df) > 20:
+            fi_df = fi_df.tail(20)
         
-        plt.figure(figsize=(9, 6))
+        plt.figure(figsize=(10, 7))
         plt.barh(fi_df['feature'], fi_df['importance'], color='#1f77b4', edgecolor='black', alpha=0.85)
-        plt.title("Tree-Based Feature Importances (Mean Decrease in Impurity)", fontweight='bold', pad=12)
+        plt.title("Tree-Based Feature Importances (Top 20 MDI)", fontweight='bold', pad=12)
         plt.xlabel("Relative Importance")
         plt.tight_layout()
         fi_path = os.path.join(output_dir, "feature_importance_tree.png")
@@ -714,16 +718,18 @@ def analyze_feature_importances(
         plots['tree_importance'] = fi_path
         
     # 2. Permutation Importance
-    perm_res = permutation_importance(best_tree_model, X_test, y_test, n_repeats=10, random_state=42, scoring='f1')
+    perm_res = permutation_importance(best_tree_model, X_test, y_test, n_repeats=5, random_state=42, scoring='f1')
     perm_df = pd.DataFrame({
         'feature': X_test.columns,
         'mean_importance': perm_res.importances_mean,
         'std': perm_res.importances_std
     }).sort_values('mean_importance', ascending=True)
+    if len(perm_df) > 20:
+        perm_df = perm_df.tail(20)
     
-    plt.figure(figsize=(9, 6))
+    plt.figure(figsize=(10, 7))
     plt.barh(perm_df['feature'], perm_df['mean_importance'], xerr=perm_df['std'], color='#2ca02c', edgecolor='black', alpha=0.85)
-    plt.title("Permutation Feature Importance on Test Set (F1 Degradation)", fontweight='bold', pad=12)
+    plt.title("Permutation Feature Importance on Test Set (Top F1 Degradation)", fontweight='bold', pad=12)
     plt.xlabel("Mean F1-Score Decrease Upon Feature Permutation")
     plt.tight_layout()
     perm_path = os.path.join(output_dir, "feature_importance_permutation.png")
@@ -738,15 +744,19 @@ def analyze_feature_importances(
         odds_ratios = np.exp(coefs)
         or_df = pd.DataFrame({
             'feature': feature_names,
-            'odds_ratio': odds_ratios
-        }).sort_values('odds_ratio', ascending=True)
+            'odds_ratio': odds_ratios,
+            'abs_log_or': np.abs(coefs)
+        }).sort_values('abs_log_or', ascending=True)
+        if len(or_df) > 20:
+            or_df = or_df.tail(20)
+        or_df = or_df.sort_values('odds_ratio', ascending=True)
         
-        plt.figure(figsize=(9, 6))
+        plt.figure(figsize=(10, 7))
         colors = ['#d62728' if x < 1.0 else '#1f77b4' for x in or_df['odds_ratio']]
         plt.barh(or_df['feature'], or_df['odds_ratio'], color=colors, edgecolor='black', alpha=0.85)
         plt.axvline(1.0, color='k', linestyle='--', lw=1.2, label='Baseline (Odds Ratio = 1.0)')
-        plt.title("Logistic Regression Predictors: Odds Ratios (exp(β))", fontweight='bold', pad=12)
-        plt.xlabel("Odds Ratio (> 1.0 indicates elevated response odds)")
+        plt.title("Logistic Regression Predictors: Odds Ratios (Top 20 Drivers)", fontweight='bold', pad=12)
+        plt.xlabel("Odds Ratio (> 1.0 indicates elevated subscription odds)")
         plt.legend(loc='lower right')
         plt.tight_layout()
         or_path = os.path.join(output_dir, "feature_importance_odds_ratios.png")
@@ -758,7 +768,9 @@ def analyze_feature_importances(
     try:
         import shap
         preprocessor = best_tree_model.named_steps['preprocessor']
-        X_test_trans = preprocessor.transform(X_test)
+        sample_size = min(300, len(X_test))
+        X_test_sub = X_test.sample(sample_size, random_state=42)
+        X_test_trans = preprocessor.transform(X_test_sub)
         explainer = shap.TreeExplainer(tree_estimator)
         shap_values = explainer.shap_values(X_test_trans)
         
@@ -769,9 +781,9 @@ def analyze_feature_importances(
         else:
             sv = shap_values
             
-        plt.figure(figsize=(10, 6))
-        shap.summary_plot(sv, X_test_trans, feature_names=feature_names, show=False, rng=np.random.default_rng(42))
-        plt.title("SHAP Feature Attribution & Impact Distribution", fontweight='bold', pad=15)
+        plt.figure(figsize=(10, 7))
+        shap.summary_plot(sv, X_test_trans, feature_names=feature_names, max_display=15, show=False)
+        plt.title("SHAP Feature Attribution & Impact Distribution (Top 15 Drivers)", fontweight='bold', pad=15)
         plt.tight_layout()
         shap_path = os.path.join(output_dir, "shap_summary.png")
         plt.savefig(shap_path, dpi=300, bbox_inches='tight')

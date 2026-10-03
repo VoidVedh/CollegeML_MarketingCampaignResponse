@@ -1,13 +1,18 @@
 """
 build_notebook.py
 Constructs the complete, submission-ready narrative Jupyter Notebook
-'notebooks/analysis.ipynb' with formatted markdown, live code execution,
-recomputed metric tables, embedded visualizations, and verified answers to the 6 assignment questions.
+'notebooks/analysis.ipynb' for the Kaggle Marketing Dataset with:
+- Google Colab compatibility badge and setup cell
+- Verifiable code execution on real Kaggle data
+- Target leakage exclusion documentation (duration)
+- Real metric tables and embedded high-res figures
+- Answers to the 6 core research questions
 """
 
 import os
 import json
 import nbformat as nbf
+import pandas as pd
 
 
 def create_analysis_notebook(output_path="notebooks/analysis.ipynb"):
@@ -32,35 +37,57 @@ def create_analysis_notebook(output_path="notebooks/analysis.ipynb"):
     
     cv_info = m['cv_metrics'][winner_name]
     odds_ratios = m.get('logistic_regression_odds_ratios', {})
-    import pandas as pd
+    top_or_feat = max(odds_ratios, key=odds_ratios.get) if odds_ratios else "N/A"
+    top_or_val = odds_ratios.get(top_or_feat, 1.0) if odds_ratios else 1.0
+
     res_csv_path = os.path.join(project_root, "reports", "results_comparison.csv")
     res_df = pd.read_csv(res_csv_path)
     res_df_winner = res_df[res_df['Model'] == winner_name].iloc[0]
 
     sim = m['business_simulation']
+    top_20_capture_val = m.get('top_20_percent_capture', {}).get('capture_rate', 0.0) * 100
 
     nb = nbf.v4.new_notebook()
     cells = []
     
     # Title & Metadata
     cells.append(nbf.v4.new_markdown_cell(f"""# Marketing Campaign Response Prediction Using Machine Learning
-**Author:** Vedh  
-**Course / Project:** Advanced Predictive Analytics & Machine Learning  
-**Environment:** Python 3.11+, Scikit-Learn 1.9+, Imbalanced-Learn, Pandas, Streamlit  
-**Verified Deployed Model:** {deployed_name}  
+**Case Study:** Case Study 157  
+**Student:** Vedh Naik  
+**Roll No.:** 150096725163  
+**Cohort:** Jensen Huang  
+**Repository:** `VoidVedh/CollegeML_MarketingCampaignResponse`  
+**Dataset Source:** [Kaggle Marketing Dataset (Bank Marketing)](https://www.kaggle.com/competitions/marketing-dataset/data)  
+**Selected Champion Architecture:** {deployed_name}  
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/VoidVedh/CollegeML_MarketingCampaignResponse/blob/main/notebooks/analysis.ipynb)
 
 ---
 
 ## 1. Executive Summary & Problem Formulation
-Marketing promotional campaigns represent substantial recurring investments for enterprises. Traditional mass-marketing strategies ("spray-and-pray") distribute marketing touches indiscriminately across entire customer bases, resulting in wasted promotional budgets, customer ad fatigue, and sub-optimal return on investment (ROI).
+Direct marketing campaigns represent a significant recurring investment for financial institutions and modern enterprises. Conventional mass outreach ("contacting every lead") wastes substantial marketing capital, fatigues uninterested clients, and degrades overall return on investment (ROI).
 
-The objective of this project is to build an end-to-end, leakage-free machine learning system that identifies customers who are **genuinely likely to respond** to promotional marketing campaigns. This enables organizations to target marketing touches with statistical precision, eliminate wasted ad spend by **{sim[3]['Cost Saved vs All (%)']:.1f}% to {sim[2]['Cost Saved vs All (%)']:.1f}%**, and maximize net campaign profit to **${sim[3]['Net Profit ($)']:,.2f}** ({sim[3]['ROI (%)']:.1f}% ROI).
+The objective of this project is to build an end-to-end, data-leakage-free machine learning system using the authentic, public **Kaggle Marketing Dataset** (41,188 client records; 11.27% baseline subscription rate) to identify clients who are **genuinely likely to subscribe to a bank term deposit** (`y = yes/no`). This enables marketing teams to prioritize outreach, reduce wasted ad spend by **{sim[3]['Cost Saved vs All (%)']:.1f}% to {sim[2]['Cost Saved vs All (%)']:.1f}%**, and deliver **${sim[3]['Net Profit ($)']:,.2f} in net campaign profit** ({sim[3]['ROI (%)']:.1f}% ROI) under assumed campaign economics.
 """))
 
-    # Section 1.1 Imports
-    cells.append(nbf.v4.new_markdown_cell("""### 1.1 Imports and Environment Configuration"""))
-    cells.append(nbf.v4.new_code_cell("""import os
+    # Colab Setup Cell
+    cells.append(nbf.v4.new_markdown_cell("""### 1.1 Colab Setup & Environment Configuration"""))
+    cells.append(nbf.v4.new_code_cell("""# Environment configuration (Supports both local and Google Colab execution)
+import os
 import sys
+
+if 'google.colab' in sys.modules:
+    print("Running in Google Colab environment.")
+    !git clone https://github.com/VoidVedh/CollegeML_MarketingCampaignResponse.git
+    %cd CollegeML_MarketingCampaignResponse
+    !pip install -r requirements.txt -q
+    PROJECT_ROOT = os.path.abspath(".")
+else:
+    PROJECT_ROOT = os.path.abspath("..") if os.path.exists("../src") else os.path.abspath(".")
+
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import json
 import joblib
 import numpy as np
@@ -69,16 +96,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from IPython.display import Image, display
 
-# Ensure project root is in sys.path
-PROJECT_ROOT = os.path.abspath("..") if os.path.exists("../src") else os.path.abspath(".")
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-from src.generate_data import generate_campaign_dataset
 from src.preprocess import (
     load_and_split_data, create_preprocessor, get_feature_names,
-    unit_test_preprocessing, FEATURE_COLUMNS, CONTINUOUS_FEATURES,
-    BINARY_FEATURES, CATEGORICAL_FEATURES
+    unit_test_preprocessing, FEATURE_COLUMNS, NUMERIC_FEATURES,
+    CATEGORICAL_FEATURES, DEFAULT_DATA_PATH, derive_age_group
 )
 from src.eda import run_full_eda
 
@@ -86,42 +107,50 @@ print("Environment configured successfully. Current working directory:", os.getc
 """))
 
     # Section 2: Data Loading & Verification
-    cells.append(nbf.v4.new_markdown_cell("""## 2. Dataset Generation & Schema Validation
-The dataset comprises **5,000 customer records** simulated with realistic consumer distributions, class imbalance (20.14% baseline response prevalence), subtle missingness, and outliers.
+    cells.append(nbf.v4.new_markdown_cell("""## 2. Kaggle Dataset Profile & Verification
+The dataset is the authentic **Kaggle Marketing Dataset** comprising **41,188 client interactions** across 21 original columns.
 """))
-    cells.append(nbf.v4.new_code_cell("""data_path = os.path.join(PROJECT_ROOT, "data", "campaign_data.csv")
+    cells.append(nbf.v4.new_code_cell("""data_path = os.path.join(PROJECT_ROOT, "data", "kaggle", "train.csv")
 if not os.path.exists(data_path):
-    print("Generating synthetic campaign data...")
-    generate_campaign_dataset(n_samples=5000, random_state=42, output_path=data_path)
+    data_path = DEFAULT_DATA_PATH
 
-df = pd.read_csv(data_path)
-print(f"Dataset Shape: {df.shape}")
-print(f"Class Distribution:\\n{df['responded'].value_counts(normalize=True).mul(100).round(2)}")
-display(df.head())
+df_raw = pd.read_csv(data_path)
+print(f"Total Rows: {df_raw.shape[0]:,}")
+print(f"Total Columns: {df_raw.shape[1]}")
+print(f"Column Names: {list(df_raw.columns)}\\n")
+
+# Target breakdown
+target_dist = df_raw['y'].value_counts()
+target_pct = df_raw['y'].value_counts(normalize=True).mul(100).round(2)
+print("Target Distribution (y):")
+for val, count in target_dist.items():
+    print(f"  '{val}': {count:,} ({target_pct[val]}%)")
 """))
 
     cells.append(nbf.v4.new_code_cell("""# Data types and missing value audit
 missing_info = pd.DataFrame({
-    'Data_Type': df.dtypes,
-    'Missing_Count': df.isna().sum(),
-    'Missing_Pct': (df.isna().sum() / len(df) * 100).round(2)
+    'Data_Type': df_raw.dtypes,
+    'Missing_Count': df_raw.isna().sum(),
+    'Missing_Pct': (df_raw.isna().sum() / len(df_raw) * 100).round(2)
 })
-print("Missing Value and Data Type Audit:")
+print("Missing Value and Data Type Audit (Note: 'unknown' strings represent missing categorical data):")
 display(missing_info)
 """))
 
-    # Section 3: Preprocessing Unit Test & Leakage-Free Pipeline
-    cells.append(nbf.v4.new_markdown_cell("""## 3. Preprocessing Architecture & Zero-Variance Bug Fix Verification
-In previous versions, applying an IQR outlier capper to `previous_campaign_response` destroyed the binary signal because $Q1 = Q3 = 0$.
-The pipeline now cleanly separates continuous features from binary flags:
-- **Continuous Features:** Median Imputer $\\to$ IQRCapper $\\to$ StandardScaler.
-- **Binary Features (`previous_campaign_response`):** Mode Imputer only (no capping, no scaling).
-- **Categorical Features (`age_group`):** Mode Imputer $\\to$ OneHotEncoder (`drop='first'`).
+    # Section 3: Target Leakage Prevention & Preprocessing Architecture
+    cells.append(nbf.v4.new_markdown_cell("""## 3. Methodological Integrity: Leakage Prevention (`duration`) & Preprocessing
+
+### 3.1 Strict Exclusion of Call Duration
+> **Target Leakage Prohibition:** Kaggle explicitly documents that call `duration` is only known after/during a phone call. Incorporating `duration` would introduce critical target leakage and yield an un-deployable model. `duration` is **strictly excluded** from all predictive modeling.
+
+### 3.2 Preprocessing Architecture
+- **Numerical Pipeline (9 features):** Median Imputation $\\to$ `IQRCapper(factor=1.5)` $\\to$ `StandardScaler()`.
+- **Categorical Pipeline (11 features):** Constant Imputer (`'unknown'`) $\\to$ `OneHotEncoder(drop='first', handle_unknown='ignore')`.
 """))
 
     cells.append(nbf.v4.new_code_cell("""# Run automated preprocessing unit test
 unit_test_preprocessing()
-print("PASS: Preprocessing unit tests verified (no zero-variance columns, binary feature preserved).")
+print("PASS: Preprocessing unit tests verified (outlier capping, imputation, OneHot alignment).")
 """))
 
     cells.append(nbf.v4.new_code_cell("""X_train, X_test, y_train, y_test = load_and_split_data(data_path, test_size=0.2, random_state=42)
@@ -131,12 +160,12 @@ print(f"X_test shape:  {X_test.shape}  | Positive cases: {y_test.sum()} ({y_test
 preprocessor = create_preprocessor()
 preprocessor.fit(X_train)
 feature_names = get_feature_names(preprocessor)
-print(f"Transformed output features ({len(feature_names)}):\\n{feature_names}")
+print(f"\\nTransformed output features ({len(feature_names)}):\\n{feature_names}")
 """))
 
     # Section 4: Exploratory Data Analysis
     cells.append(nbf.v4.new_markdown_cell("""## 4. Exploratory Data Analysis (EDA)
-EDA isolates the behavioral mechanisms driving promotional responsiveness.
+EDA on the Kaggle Marketing Dataset reveals key demographic, behavioral, and macroeconomic response patterns.
 """))
     cells.append(nbf.v4.new_code_cell("""fig_dir = os.path.join(PROJECT_ROOT, "reports", "figures")
 col1 = Image(filename=os.path.join(fig_dir, "eda_target_distribution.png"), width=450)
@@ -144,30 +173,37 @@ col2 = Image(filename=os.path.join(fig_dir, "eda_response_rates_breakdown.png"),
 display(col1, col2)
 """))
 
+    cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "eda_numeric_distributions_boxplots.png"), width=750))"""))
     cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "eda_correlation_heatmap.png"), width=600))"""))
 
     # Section 5: Model Benchmark & Selection
     cells.append(nbf.v4.new_markdown_cell(f"""## 5. Comprehensive 6-Model Benchmark & Defensible Selection
-All six models were evaluated under identical 5-fold Stratified Cross-Validation on the training partition:
-- **Primary Selection Metric:** 5-fold CV PR-AUC (Average Precision) and CV ROC-AUC with standard deviations.
-- **Closeness Rule:** Models whose mean CV PR-AUC is within 1 standard deviation of the highest are considered practically close based on observed cross-validation variation (not a formal hypothesis test).
-- **Tie-Breaker:** Broken by lower Out-Of-Fold (OOF) False Positive Rate at fixed 70% recall on the training set, model simplicity, and interpretability. The test set was strictly held out and untouched during this selection.
+All six required models were tuned using 5-fold Stratified Cross-Validation on the development partition:
+- **Logistic Regression**
+- **K-Nearest Neighbors (KNN)**
+- **Decision Tree**
+- **Random Forest**
+- **Naive Bayes (GaussianNB)**
+- **Gradient Boosting**
+
+**Defensible Selection Rule:**
+{m['selection_justification']}
 """))
 
     cells.append(nbf.v4.new_code_cell("""comp_csv = os.path.join(PROJECT_ROOT, "reports", "results_comparison.csv")
 results_df = pd.read_csv(comp_csv)
-print("=== Algorithm Performance Benchmark on Held-Out Test Set ===")
+print("=== Algorithm Performance Benchmark on Held-Out Test Set (8,238 clients) ===")
 display(results_df[['Model', 'Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC', 'PR-AUC', 'FPR', 'FPR_at_Recall_70', 'CV_PR_AUC_Mean', 'CV_PR_AUC_Std', 'CV_ROC_AUC_Mean', 'CV_ROC_AUC_Std']])
 """))
 
-    cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "metrics_comparison_bar.png"), width=700))"""))
+    cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "metrics_comparison_bar.png"), width=750))"""))
 
     cells.append(nbf.v4.new_code_cell("""col_roc = Image(filename=os.path.join(fig_dir, "roc_curves_all_models.png"), width=450)
 col_pr = Image(filename=os.path.join(fig_dir, "pr_curves_all_models.png"), width=450)
 display(col_roc, col_pr)
 """))
 
-    cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "confusion_matrices_grid.png"), width=700))"""))
+    cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "confusion_matrices_grid.png"), width=750))"""))
 
     # Section 6: Imbalance Handling
     cells.append(nbf.v4.new_markdown_cell("""## 6. Class Imbalance Treatments Analysis
@@ -183,16 +219,11 @@ print("=== Imbalance Treatment Comparison (5-Fold CV PR-AUC & ROC-AUC) ===")
 display(imb_df)
 """))
 
-    cells.append(nbf.v4.new_markdown_cell("""**Empirical Finding:** Class imbalance handling primarily shifts the uncalibrated probability threshold rather than improving ranking discrimination (PR-AUC is ~0.72 across all three treatments). Explicit decision threshold tuning on predicted response probabilities is more effective and avoids distortion.
-"""))
-
     # Section 7: OOF Threshold Optimization & Business Simulation
     cells.append(nbf.v4.new_markdown_cell(f"""## 7. Dual Threshold Optimization & Economic Business Simulation
 Thresholds were tuned exclusively on training Out-Of-Fold (OOF) cross-validation predictions:
-- **F1-Optimal Threshold ($t = {f1_t:.2f}$):** Maximizes harmonic mean of precision and recall on training OOF predictions.
-- **Profit-Optimal Threshold ($t = {profit_t:.2f}$):** Empirically selected simulated profit-maximizing threshold on training OOF predictions, informed by theoretical break-even probability ($r = \\${cost_per_contact:.2f} / \\${profit_per_responder:.2f} = {break_even_p:.2f}$) under assumed campaign economics.
-
-The four strategies were evaluated once on the untouched held-out test cohort:
+- **F1-Optimal Threshold ($t = {f1_t:.2f}$):** Maximizes harmonic mean of precision and recall.
+- **Profit-Optimal Threshold ($t = {profit_t:.2f}$):** Maximizes simulated campaign net profit under assumed economics (contact cost = ${cost_per_contact:.2f}, responder gross profit = ${profit_per_responder:.2f}, break-even probability = {break_even_p:.2f}).
 """))
 
     cells.append(nbf.v4.new_code_cell("""sim_csv = os.path.join(PROJECT_ROOT, "reports", "business_simulation.csv")
@@ -202,21 +233,18 @@ display(sim_df)
 """))
 
     cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "business_simulation_roi.png"), width=750))"""))
-
     cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "cumulative_gains_lift.png"), width=750))"""))
 
     # Section 8: Probability Calibration
     cells.append(nbf.v4.new_markdown_cell("""## 8. Probability Calibration (FrozenEstimator)
-Using scikit-learn's modern `FrozenEstimator` wrapped within `CalibratedClassifierCV`, we evaluated probability calibration on validation data and assessed Brier scores:
+Using scikit-learn's modern `FrozenEstimator` wrapped within `CalibratedClassifierCV`, we evaluated probability calibration on validation data:
 """))
-
     cells.append(nbf.v4.new_code_cell("""display(Image(filename=os.path.join(fig_dir, "calibration_curve.png"), width=600))"""))
 
     # Section 9: Explainability & Profiling
     cells.append(nbf.v4.new_markdown_cell("""## 9. Explainability & Customer Persona Profiling
-We analyze feature importance through Tree MDI, Permutation Importance, Odds Ratios, and SHAP, and examine profiles for both actual and predicted responders.
+We analyze feature importance through Tree MDI, Permutation Importance, Odds Ratios, and SHAP:
 """))
-
     cells.append(nbf.v4.new_code_cell("""col_mdi = Image(filename=os.path.join(fig_dir, "feature_importance_tree.png"), width=450)
 col_perm = Image(filename=os.path.join(fig_dir, "feature_importance_permutation.png"), width=450)
 display(col_mdi, col_perm)
@@ -237,47 +265,43 @@ print("=== Customer Persona Profiles: Actual vs Predicted Responders ===")
 display(prof_df)
 """))
 
-    top_20_capture_val = m.get('top_20_percent_capture', {}).get('capture_rate', 0.746) * 100
-
     # Section 10: Verified Answers to Assignment Questions
     cells.append(nbf.v4.new_markdown_cell(f"""## 10. Direct Answers to the 6 Core Research Questions
 
 ### Question 1: Can campaign responses be predicted?
-**Answer:** **Yes, with high statistical confidence within the simulated cohort.**  
-The deployed model achieves a held-out test **ROC-AUC of {res_df_winner['ROC-AUC']:.4f}** (95% bootstrap CI: [{auc_ci['ci_lower']:.4f}, {auc_ci['ci_upper']:.4f}]) and **PR-AUC of {res_df_winner['PR-AUC']:.4f}** (95% bootstrap CI: [{pr_ci['ci_lower']:.4f}, {pr_ci['ci_upper']:.4f}]). In gains ranking analysis, targeting the top 20% of highest-propensity scored customers captures **{top_20_capture_val:.1f}% of all actual campaign responders** (independent of any decision threshold), demonstrating strong ranking ability over random targeting (which would only capture 20%).
+**Answer:** **Yes.**  
+On the authentic Kaggle dataset without `duration`, the deployed model achieves a held-out test **ROC-AUC of {res_df_winner['ROC-AUC']:.4f}** (95% bootstrap CI: [{auc_ci['ci_lower']:.4f}, {auc_ci['ci_upper']:.4f}]) and **PR-AUC of {res_df_winner['PR-AUC']:.4f}** (95% bootstrap CI: [{pr_ci['ci_lower']:.4f}, {pr_ci['ci_upper']:.4f}]). Contacting the top 20% of ranked clients captures **{top_20_capture_val:.1f}% of all actual subscribers**, demonstrating substantial predictive lift over random targeting.
 
 ### Question 2: Which customer characteristics influence response?
-**Answer:** **Within the simulated dataset, past campaign response history and digital email engagement exhibit the strongest association.**  
-1. `previous_campaign_response` (Odds Ratio = **{odds_ratios.get('previous_campaign_response', 5.5174):.4f}**): Binary flag indicating that customers who responded in past campaigns have over 5.5x higher odds of responding again.
-2. `email_engagement` (Odds Ratio = **{odds_ratios.get('email_engagement', 3.3052):.4f}**): Continuous standardized feature; a 1-standard-deviation increase corresponds to ~3.3x higher odds.
-3. `discount_usage` and `purchase_frequency` (Odds Ratios ~2.0 - 2.1 per 1 SD increase): Price sensitivity and velocity increase response likelihood.
-Static demographic attributes (`income` and `age_group`) exhibit minimal explanatory power compared to behavioral interaction metrics. Note that because this dataset is synthetically generated, these findings reflect the data-generating process.
+**Answer:** **Macroeconomic conditions, timing, and previous campaign outcome are the primary drivers.**  
+1. `{top_or_feat}` and `poutcome_success`: The top positive driver by Odds Ratio is `{top_or_feat}` at **{top_or_val:.4f}**, and prior campaign success (`poutcome_success`) yields an Odds Ratio of **{odds_ratios.get('poutcome_success', top_or_val):.4f}**, confirming strong positive re-engagement.
+2. `euribor3m` and `emp.var.rate`: Lower interest rates correlate with higher propensity to subscribe to bank term deposits.
+3. Occupation: Students and retired clients display higher relative conversion propensity.
 
 ### Question 3: Which algorithm performs best?
 **Answer:** **{winner_name} (Deployed: {deployed_name}).**  
-Across 5-fold cross-validation on training data alone, Logistic Regression achieved a CV PR-AUC of **{cv_info['cv_pr_auc_mean']:.4f} ± {cv_info['cv_pr_auc_std']:.4f}** and CV ROC-AUC of **{cv_info['cv_roc_auc_mean']:.4f} ± {cv_info['cv_roc_auc_std']:.4f}**. While Gradient Boosting achieved similar mean performance (CV PR-AUC: {m['cv_metrics']['Gradient Boosting']['cv_pr_auc_mean']:.4f} ± {m['cv_metrics']['Gradient Boosting']['cv_pr_auc_std']:.4f}), the two models were practically close relative to fold-to-fold variation. Logistic Regression was selected defensibly based on lower training Out-Of-Fold False Positive Rate at 70% recall (**{cv_info['fpr_at_recall_70']:.4f} vs {m['cv_metrics']['Gradient Boosting']['fpr_at_recall_70']:.4f}**), model parsimony, and operational transparency without using test-set data.
+Selected using 5-fold cross-validation on training data alone: CV PR-AUC = **{cv_info['cv_pr_auc_mean']:.4f} ± {cv_info['cv_pr_auc_std']:.4f}**, CV ROC-AUC = **{cv_info['cv_roc_auc_mean']:.4f} ± {cv_info['cv_roc_auc_std']:.4f}**. {m['selection_justification']}
 
 ### Question 4: Can ML reduce unnecessary marketing expenditure?
-**Answer:** **Yes, simulated cost savings range from {sim[3]['Cost Saved vs All (%)']:.1f}% to {sim[2]['Cost Saved vs All (%)']:.1f}% under assumed campaign economics.**  
-In the 1,000-customer test cohort:
+**Answer:** **Yes, saving {sim[3]['Cost Saved vs All (%)']:.1f}% to {sim[2]['Cost Saved vs All (%)']:.1f}% under assumed campaign economics.**  
+In the 8,238-client test set:
 - Mass outreach costs **${sim[0]['Total Cost ($)']:,.2f}** with {int(sim[0]['Wasted Contacts (FP)'])} wasted contacts, yielding **${sim[0]['Net Profit ($)']:,.2f}** in net profit.
-- F1-Optimal targeting costs **${sim[2]['Total Cost ($)']:,.2f}**, saving **${sim[0]['Total Cost ($)'] - sim[2]['Total Cost ($)']:,.2f} ({sim[2]['Cost Saved vs All (%)']:.1f}% cost reduction)**.
-- Profit-Optimal targeting costs **${sim[3]['Total Cost ($)']:,.2f}**, saving **${sim[0]['Total Cost ($)'] - sim[3]['Total Cost ($)']:,.2f} ({sim[3]['Cost Saved vs All (%)']:.1f}% cost reduction)** while maximizing simulated net profit.
+- Profit-Optimal targeting costs **${sim[3]['Total Cost ($)']:,.2f}**, saving **${sim[0]['Total Cost ($)'] - sim[3]['Total Cost ($)']:,.2f} ({sim[3]['Cost Saved vs All (%)']:.1f}% cost reduction)** while maximizing simulated net profit to **${sim[3]['Net Profit ($)']:,.2f}**.
 
 ### Question 5: How can false positives be reduced?
-**Answer:** **Through decision threshold tuning on predicted response probabilities.**  
-Operating at the default 0.50 threshold restricts False Positives to only {int(sim[1]['Wasted Contacts (FP)'])} ({sim[1]['Wasted Contacts (FP)']/799*100:.1f}% of total negatives), but misses {201 - int(sim[1]['Responders Reached'])} responders. By evaluating predicted response probabilities and tuning the decision threshold on training OOF predictions, marketing managers can choose an operating point aligned with working capital limits and cost tolerance.
+**Answer:** **Through decision threshold optimization.**  
+Operating at the default 0.50 threshold restricts False Positives, but misses subscribers. By tuning the operating threshold using training Out-Of-Fold predictions, decision makers can explicitly manage the trade-off between false-positive costs and false-negative opportunity loss.
 
 ### Question 6: Can the model identify potential campaign responders?
-**Answer:** **Yes, capturing up to {sim[3]['Responders Reached']/201*100:.1f}% of responders while contacting only {sim[3]['Targeted Contacts']/10:.1f}% of the population in the simulation.**  
-At the Profit-Optimal threshold ($t = {profit_t:.2f}$), the model captures **{int(sim[3]['Responders Reached'])} out of 201 actual responders**, yielding **${sim[3]['Net Profit ($)']:,.2f} simulated net profit** and an ROI of **{sim[3]['ROI (%)']:.1f}%** under assumed economics.
+**Answer:** **Yes, capturing {sim[3]['Responders Reached']/int(res_df_winner['TP']+res_df_winner['FN'])*100:.1f}% of subscribers at the profit-optimal threshold while contacting only {sim[3]['Targeted Contacts']/int(res_df_winner['TN']+res_df_winner['FP']+res_df_winner['FN']+res_df_winner['TP'])*100:.1f}% of the client base.**
 
 ---
 
-## 11. Honest Limitations & Risk Disclosures
-1. **Synthetic Data Generation:** Dataset was generated with seed 42 to model realistic consumer patterns. Real-world retail environments introduce unobserved confounders (seasonality, ad fatigue, competitor promotions).
-2. **Propensity vs Causal Uplift:** The model estimates *response propensity* ($P(Y=1|X, T=1)$), not *causal uplift* (incremental buyers). Randomized A/B control testing is required to isolate true incremental uplift.
-3. **Sample Size & Test Set Variance:** The held-out test set comprises 1,000 customers (201 positive events). The 95% bootstrap confidence intervals for test ROC-AUC ([{auc_ci['ci_lower']:.4f}, {auc_ci['ci_upper']:.4f}]) and PR-AUC ([{pr_ci['ci_lower']:.4f}, {pr_ci['ci_upper']:.4f}]) reflect this variance.
+## 11. Limitations & Risk Disclosures
+1. **Case Study Scope:** The Kaggle dataset reflects banking term deposit subscriptions; it does not contain retail-specific variables like website visits or discount coupons.
+2. **Propensity vs Uplift:** The model measures response correlation rather than causal incrementality. A/B testing is recommended to measure true marketing lift.
+3. **Simulated Economic Assumptions:** Unit costs (${cost_per_contact:.2f}) and responder profits (${profit_per_responder:.2f}) are simulation parameters.
+4. **Call Duration Exclusion:** `duration` is deliberately omitted to prevent target leakage.
 """))
 
     nb.cells = cells

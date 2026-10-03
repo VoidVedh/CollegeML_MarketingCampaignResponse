@@ -45,11 +45,10 @@ from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTENC
 
 # Local imports
-from src.generate_data import generate_campaign_dataset
 from src.preprocess import (
     load_and_split_data, create_preprocessor, get_feature_names,
-    unit_test_preprocessing, FEATURE_COLUMNS, CONTINUOUS_FEATURES,
-    BINARY_FEATURES, CATEGORICAL_FEATURES, TARGET_COLUMN
+    unit_test_preprocessing, DEFAULT_DATA_PATH,
+    NUMERIC_FEATURES, CATEGORICAL_FEATURES, FEATURE_COLUMNS, TARGET_COLUMN
 )
 from src.eda import run_full_eda
 from src.evaluate import (
@@ -354,16 +353,11 @@ def evaluate_imbalance_treatments(
     treatments = []
     
     # Dynamically derive categorical indices from fitted preprocessor:
-    # index of 'previous_campaign_response' plus all indices whose feature names start with 'age_group_'
+    # All OneHotEncoder columns follow the numerical columns
     preproc_fitted = create_preprocessor().fit(X_train)
     all_feat_names = list(preproc_fitted.get_feature_names_out())
-    if 'previous_campaign_response' not in all_feat_names:
-        raise ValueError("Feature 'previous_campaign_response' not found in preprocessor feature names.")
-    prev_idx = all_feat_names.index('previous_campaign_response')
-    age_indices = [i for i, name in enumerate(all_feat_names) if name.startswith('age_group_')]
-    if not age_indices:
-        raise ValueError("No 'age_group_' features found in preprocessor feature names.")
-    cat_indices = sorted([prev_idx] + age_indices)
+    n_num = len(NUMERIC_FEATURES)
+    cat_indices = list(range(n_num, len(all_feat_names)))
     
     # Treatment 1: None
     pipe_none = Pipeline([
@@ -448,14 +442,15 @@ def evaluate_imbalance_treatments(
 
 
 def run_full_pipeline(
-    data_path: str = "data/campaign_data.csv",
+    data_path: str = DEFAULT_DATA_PATH,
     models_dir: str = "models",
     reports_dir: str = "reports",
     random_state: int = 42
 ) -> Dict[str, Any]:
     """
-    End-to-end execution of data generation, EDA, training, tuning,
-    evaluation, simulation, explainability, profiling, and report building.
+    End-to-end execution of data loading, EDA, training, tuning,
+    evaluation, simulation, explainability, profiling, and report building
+    on the Kaggle Marketing Dataset.
     """
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(reports_dir, exist_ok=True)
@@ -467,8 +462,7 @@ def run_full_pipeline(
     print("STEP 1: DATA VERIFICATION & UNIT TESTS")
     print("="*70)
     if not os.path.exists(data_path):
-        print("Generating campaign dataset...")
-        generate_campaign_dataset(output_path=data_path, random_state=random_state)
+        raise FileNotFoundError(f"Kaggle dataset not found at {data_path}. Please place train.csv in data/kaggle/.")
     unit_test_preprocessing()
     
     # 2. Exploratory Data Analysis
@@ -634,8 +628,7 @@ def run_full_pipeline(
     with open(feature_list_path, 'w') as f:
         json.dump({
             'raw_features': FEATURE_COLUMNS,
-            'continuous_features': CONTINUOUS_FEATURES,
-            'binary_features': BINARY_FEATURES,
+            'numeric_features': NUMERIC_FEATURES,
             'categorical_features': CATEGORICAL_FEATURES,
             'transformed_features': feature_names,
             'target_column': TARGET_COLUMN

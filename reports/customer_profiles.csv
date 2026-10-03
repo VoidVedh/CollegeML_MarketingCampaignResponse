@@ -1,6 +1,6 @@
-,income,income,previous_purchases,previous_purchases,purchase_frequency,purchase_frequency,previous_campaign_response,previous_campaign_response,website_visits,website_visits,email_engagement,email_engagement,discount_usage,discount_usage
-,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median
-Actual Non-Responder,54949.97,48154.96,7.14,7.0,1.85,1.63,0.1,0.0,8.77,7.0,0.37,0.35,0.41,0.4
-Actual Responder,54284.37,46254.18,7.39,7.0,2.67,2.38,0.53,1.0,10.68,9.0,0.56,0.57,0.49,0.5
-Predicted Non-Responder,51525.42,44787.09,6.61,6.0,1.59,1.46,0.01,0.0,8.45,7.0,0.28,0.26,0.36,0.35
-Predicted Responder,57698.32,49757.54,7.7,7.0,2.38,2.2,0.34,0.0,9.77,8.0,0.52,0.51,0.49,0.49
+,age,age,campaign,campaign,pdays,pdays,previous,previous,emp.var.rate,emp.var.rate,cons.price.idx,cons.price.idx,cons.conf.idx,cons.conf.idx,euribor3m,euribor3m,nr.employed,nr.employed
+,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median,mean,median
+Actual Non-Responder,39.92,38.0,2.67,2.0,985.16,999.0,0.13,0.0,0.26,1.1,93.61,93.92,-40.57,-41.8,3.83,4.86,5177.13,5195.8
+Actual Responder,41.16,37.0,2.04,1.0,798.83,999.0,0.48,0.0,-1.31,-1.8,93.33,93.08,-39.79,-40.4,2.05,1.27,5092.36,5099.1
+Predicted Non-Responder,39.7,38.0,2.76,2.0,998.11,999.0,0.08,0.0,0.61,1.1,93.68,93.92,-40.63,-41.8,4.21,4.86,5193.37,5195.8
+Predicted Responder,41.65,37.0,1.87,1.0,818.07,999.0,0.52,0.0,-2.17,-1.8,93.11,92.96,-39.84,-40.4,1.16,1.03,5056.57,5076.2

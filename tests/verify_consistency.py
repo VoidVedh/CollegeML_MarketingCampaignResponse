@@ -51,8 +51,10 @@ def verify_all_consistency():
     strat1 = next(s for s in sim if 'Everyone' in s['Strategy'])
     strat1_profit = f"${strat1['Net Profit ($)']:,.2f}"
     
-    # Odds ratio of previous_campaign_response
-    odds_ratio_prev = f"{m['logistic_regression_odds_ratios']['previous_campaign_response']:.4f}"
+    # Odds ratio of top driver
+    odds_ratios = m.get('logistic_regression_odds_ratios', {})
+    top_or_feat = max(odds_ratios, key=odds_ratios.get) if odds_ratios else "N/A"
+    top_or_val = f"{odds_ratios[top_or_feat]:.4f}"
     
     # Brier scores
     val_uncal = f"{m['brier_scores']['validation_uncalibrated']:.5f}"
@@ -71,7 +73,7 @@ def verify_all_consistency():
         ("Profit-Optimal Total Cost", strat4_cost),
         ("Profit-Optimal Cost Saved", strat4_saved),
         ("Contact Everyone Net Profit", strat1_profit),
-        ("Previous Campaign Response Odds Ratio", odds_ratio_prev),
+        ("Top Driver Odds Ratio", top_or_val),
         ("Validation Uncalibrated Brier", val_uncal),
         ("Validation Calibrated Brier", val_cal),
     ]

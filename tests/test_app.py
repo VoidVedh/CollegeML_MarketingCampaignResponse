@@ -39,7 +39,7 @@ def test_single_prediction_flow():
     assert len(at.exception) == 0
     
     # Find and click the predict button
-    predict_btn = next((b for b in at.button if "Predict Campaign Response" in b.label), None)
+    predict_btn = next((b for b in at.button if "Predict" in b.label), None)
     assert predict_btn is not None, "Predict button not found in app"
     
     predict_btn.click().run()
@@ -83,37 +83,49 @@ def test_batch_csv_upload():
     at.run()
     assert len(at.exception) == 0
     
-    # Create sample CSV in memory with missing values and edge cases to test audit warnings
+    # Create sample CSV in memory with Kaggle schema
     sample_df = pd.DataFrame([
         {
-            'age_group': '26-35',
-            'income': 58000.0,
-            'previous_purchases': 10,
-            'purchase_frequency': 3.2,
-            'previous_campaign_response': 1,
-            'website_visits': 12,
-            'email_engagement': 0.75,
-            'discount_usage': 0.60
+            'age': 35,
+            'job': 'admin.',
+            'marital': 'married',
+            'education': 'university.degree',
+            'default': 'no',
+            'housing': 'yes',
+            'loan': 'no',
+            'contact': 'cellular',
+            'month': 'may',
+            'day_of_week': 'mon',
+            'campaign': 2,
+            'pdays': 999,
+            'previous': 0,
+            'poutcome': 'nonexistent',
+            'emp.var.rate': 1.1,
+            'cons.price.idx': 93.994,
+            'cons.conf.idx': -36.4,
+            'euribor3m': 4.857,
+            'nr.employed': 5191.0
         },
         {
-            'age_group': None, # Missing categorical
-            'income': None, # Missing numeric
-            'previous_purchases': 2,
-            'purchase_frequency': 0.5,
-            'previous_campaign_response': 0,
-            'website_visits': 3,
-            'email_engagement': 0.15,
-            'discount_usage': 0.20
-        },
-        {
-            'age_group': 'UnknownGroup', # Out-of-bounds categorical
-            'income': 95000.0,
-            'previous_purchases': 15,
-            'purchase_frequency': 1.8,
-            'previous_campaign_response': 2, # Out-of-bounds binary
-            'website_visits': 6,
-            'email_engagement': 1.25, # Out-of-bounds proportion
-            'discount_usage': 0.45
+            'age': 28,
+            'job': 'student',
+            'marital': 'single',
+            'education': 'high.school',
+            'default': 'no',
+            'housing': 'no',
+            'loan': 'no',
+            'contact': 'cellular',
+            'month': 'sep',
+            'day_of_week': 'wed',
+            'campaign': 1,
+            'pdays': 6,
+            'previous': 2,
+            'poutcome': 'success',
+            'emp.var.rate': -1.8,
+            'cons.price.idx': 92.893,
+            'cons.conf.idx': -46.2,
+            'euribor3m': 1.299,
+            'nr.employed': 5099.1
         }
     ])
     csv_bytes = sample_df.to_csv(index=False).encode('utf-8')

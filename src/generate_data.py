@@ -1,8 +1,12 @@
 """
-generate_data.py
-Generates a realistic synthetic marketing campaign response dataset
-with ~5,000 records, realistic distributions, non-linear relationships,
-missing values, and subtle outliers for robust data cleaning demonstrations.
+[LEGACY / DEPRECATED] generate_data.py
+
+WARNING: This module was the initial synthetic simulation generator and is now
+retained strictly for historical reference. The active, production machine learning
+pipeline has been fully migrated to the real Kaggle Marketing Dataset:
+https://www.kaggle.com/competitions/marketing-dataset/data (data/kaggle/train.csv).
+
+This synthetic generator is NOT used in the final model, report, or deployed application.
 """
 
 import os
