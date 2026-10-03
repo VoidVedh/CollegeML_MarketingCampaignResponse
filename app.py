@@ -254,7 +254,7 @@ with st.sidebar:
     st.button("🔄 Reset to Profit-Optimal Threshold", on_click=reset_to_optimal_threshold)
         
     st.markdown("---")
-    st.caption("Author: Vedh • College ML Submission Project")
+    st.markdown("**Student:** Vedh Naik  \n**Roll No.:** 150096725163  \n**Cohort:** Jensen Huang  \n**Case Study:** 157")
 
 
 # -------------------------------------------------------------

@@ -1,7 +1,9 @@
 # Marketing Campaign Response Prediction Using Machine Learning
 
-**Author:** Vedh  
-**Course / Project:** College Machine Learning Project  
+**Author:** Vedh Naik  
+**Roll No.:** 150096725163  
+**Cohort:** Jensen Huang  
+**Course / Project:** College Machine Learning Project — Case Study 157  
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.9.0-orange.svg)](https://scikit-learn.org/)
