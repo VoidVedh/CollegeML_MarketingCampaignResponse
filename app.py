@@ -255,6 +255,7 @@ with st.sidebar:
         
     st.markdown("---")
     st.markdown("**Student:** Vedh Naik  \n**Roll No.:** 150096725163  \n**Cohort:** Jensen Huang  \n**Case Study:** 157")
+    st.markdown("[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/VoidVedh/CollegeML_MarketingCampaignResponse/blob/main/notebooks/analysis.ipynb)")
 
 
 # -------------------------------------------------------------

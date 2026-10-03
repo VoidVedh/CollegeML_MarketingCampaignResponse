@@ -9,6 +9,7 @@
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.9.0-orange.svg)](https://scikit-learn.org/)
 [![Streamlit](https://img.shields.io/badge/streamlit-1.64.0-red.svg)](https://streamlit.io/)
 [![Status](https://img.shields.io/badge/verification-passed-brightgreen.svg)]()
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/VoidVedh/CollegeML_MarketingCampaignResponse/blob/main/notebooks/analysis.ipynb)
 
 > **System Requirement:** Python >= 3.11. All dependencies in `requirements.txt` are exact pinned versions.
 
